@@ -1,0 +1,42 @@
+export const pipelineDefinitions = [
+  {
+    key: "atlas_image",
+    name: "Atlas Image",
+    status: "Ready",
+    tone: "green",
+    iconTone: "accent",
+    summary: "Before photo to after concept for in-person qualification.",
+  },
+  {
+    key: "proposal",
+    name: "Atlas Proposal",
+    status: "Later",
+    tone: "muted",
+    iconTone: "blue",
+    summary: "Turn file context and concept images into a client document.",
+  },
+  {
+    key: "scheduler",
+    name: "Scheduler",
+    status: "Later",
+    tone: "muted",
+    iconTone: "green",
+    summary: "Accepted-job subcontractor email and coordination workspace.",
+  },
+  {
+    key: "estimate_builder",
+    name: "Estimate Builder",
+    status: "Custom",
+    tone: "muted",
+    iconTone: "amber",
+    summary: "Draft range, assumptions, and next-step pricing notes.",
+  },
+  {
+    key: "image_library",
+    name: "Image Library",
+    status: "Custom",
+    tone: "muted",
+    iconTone: "accent",
+    summary: "Store source photos, selected concepts, references, and exports.",
+  },
+] as const;
