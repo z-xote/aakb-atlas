@@ -1,8 +1,9 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { ChevronRightIcon, FolderKanbanIcon, ImageIcon } from "lucide-react";
+import { ArrowLeftIcon, ImageIcon, LogOutIcon } from "lucide-react";
 
+import { ThemeMenu } from "@/features/files/components/theme-menu";
 import { cn } from "@/lib/utils";
 import { clockPositionHints, type ClockPosition } from "./mock-data";
 
@@ -107,45 +108,99 @@ export function MockImage({
 }
 
 /* ------------------------------------------------------------------ */
-/* MockTopbar — visual-only copy of the app chrome                     */
+/* MockTopbar — visual-only copy of the production AtlasTopbar chrome   */
 /* ------------------------------------------------------------------ */
 
 export type MockTopbarProps = {
-  /** Trail shown after the brand, e.g. ["Files", "Hartley — Main Bathroom"]. */
+  /** Breadcrumb trail, e.g. ["Files", "Hartley — Main Bathroom"]. The last
+   *  entry is the current page; earlier entries render as muted links. When
+   *  omitted, the topbar sits at the root ("Files", no back button). */
   breadcrumb?: string[];
-  /** Right-aligned slot for screen-specific actions. */
+  /** Wires the back arrow to real navigation (e.g. leaving a sub-page). When
+   *  omitted the back button stays visual-only, as in most prototype frames. */
+  onBack?: () => void;
+  /** Right-aligned slot for screen-specific actions, before theme + sign out. */
   actions?: ReactNode;
-  subtitle?: string;
 };
 
-export function MockTopbar({ breadcrumb, actions, subtitle = "All About Kitchens & Bathrooms" }: MockTopbarProps) {
+/**
+ * Mirror of the app's {@link AtlasTopbar}: a back button + "Files / …"
+ * breadcrumb on the left, theme toggle and sign-out on the right. Back and
+ * sign-out are visual-only here so the click-through prototype never navigates
+ * away or ends its session.
+ */
+export function MockTopbar({ breadcrumb, onBack, actions }: MockTopbarProps) {
+  const trail = breadcrumb && breadcrumb.length > 0 ? breadcrumb : ["Files"];
+  const isRoot = !breadcrumb || breadcrumb.length === 0;
+
   return (
     <header className="atlas-topbar">
-      <div className="atlas-brand">
-        <span className="atlas-brand-mark">
-          <FolderKanbanIcon className="size-4" />
-        </span>
-        <span className="atlas-brand-copy">
-          <strong>Atlas</strong>
-          <span>{subtitle}</span>
-        </span>
-      </div>
-      {breadcrumb && breadcrumb.length > 0 ? (
-        <nav className="atlas-breadcrumb ml-4 hidden sm:flex">
-          {breadcrumb.map((part, index) => {
-            const isLast = index === breadcrumb.length - 1;
-            return (
-              <span className="flex min-w-0 items-center gap-2" key={part}>
-                {index > 0 ? <ChevronRightIcon className="size-3.5 shrink-0" /> : null}
-                <span className={cn(isLast && "atlas-current")}>{part}</span>
+      {isRoot ? null : (
+        <button
+          className="atlas-icon-button"
+          type="button"
+          aria-label="Back"
+          onClick={onBack}
+        >
+          <ArrowLeftIcon />
+        </button>
+      )}
+
+      <nav className="atlas-breadcrumb" aria-label="Breadcrumb">
+        {trail.map((part, index) => {
+          const isLast = index === trail.length - 1;
+          return (
+            <span className="flex min-w-0 items-center gap-2" key={part}>
+              {index > 0 ? <span aria-hidden="true">/</span> : null}
+              <span className={cn(isLast ? "atlas-current" : "whitespace-nowrap")}>
+                {part}
               </span>
-            );
-          })}
-        </nav>
-      ) : null}
+            </span>
+          );
+        })}
+      </nav>
+
       <div className="atlas-topbar-spacer" />
-      {actions ? <div className="atlas-topbar-actions">{actions}</div> : null}
+      <div className="atlas-topbar-actions">
+        {actions}
+        <ThemeMenu />
+        <button className="atlas-signout-button" type="button">
+          <LogOutIcon />
+          <span>Sign out</span>
+        </button>
+      </div>
     </header>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* MockBottomNav — sticky, full-bleed progression bar                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Full-width sticky bottom nav shared across the Atlas Image pipeline
+ * screens. It hosts exactly two big, half-width actions — a back/secondary
+ * choice on the left and the forward/primary choice on the right — so the
+ * flow is thumb-friendly on the site iPad. Pass two elements as children;
+ * give each `w-full` so it fills its half.
+ */
+export function MockBottomNav({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="sticky bottom-0 z-30 border-t"
+      style={{
+        borderColor: "var(--atlas-border)",
+        background: "color-mix(in srgb, var(--atlas-bg-surface) 92%, transparent)",
+        backdropFilter: "blur(14px)",
+      }}
+    >
+      <div
+        className="atlas-frame grid items-center gap-3 py-3"
+        style={{ gridTemplateColumns: "1fr 1fr" }}
+      >
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -207,10 +262,15 @@ export type ClockDialProps = {
 };
 
 const dialSpots: Array<{ position: ClockPosition; style: CSSProperties }> = [
+  // Edge midpoints hold the true clock spots; the four corners take 2/4/8/10.
   { position: "12", style: { top: 0, left: "50%", transform: "translate(-50%, -50%)" } },
+  { position: "2", style: { top: 0, right: 0, transform: "translate(50%, -50%)" } },
   { position: "3", style: { top: "50%", right: 0, transform: "translate(50%, -50%)" } },
+  { position: "4", style: { bottom: 0, right: 0, transform: "translate(50%, 50%)" } },
   { position: "6", style: { bottom: 0, left: "50%", transform: "translate(-50%, 50%)" } },
+  { position: "8", style: { bottom: 0, left: 0, transform: "translate(-50%, 50%)" } },
   { position: "9", style: { top: "50%", left: 0, transform: "translate(-50%, -50%)" } },
+  { position: "10", style: { top: 0, left: 0, transform: "translate(-50%, -50%)" } },
 ];
 
 /**
@@ -227,7 +287,9 @@ export function ClockDial({
   return (
     <div
       className={cn("relative", className)}
-      style={{ width: size, height: size, margin: "14px" }}
+      // Extra top margin reserves room for the "Door" caption, which floats
+      // above the dial clear of the 12 o'clock spot.
+      style={{ width: size, height: size, margin: "46px 14px 14px" }}
     >
       <div
         className="absolute inset-0 rounded-lg border-2 border-dashed"
@@ -239,7 +301,9 @@ export function ClockDial({
           background: "var(--atlas-bg-surface)",
           color: "var(--atlas-text-tertiary)",
           border: "1px solid var(--atlas-border)",
-          marginTop: -14,
+          // Lift the caption above the 12 o'clock button (which straddles the
+          // dial's top edge) so the two no longer overlap.
+          marginTop: -32,
         }}
       >
         Door

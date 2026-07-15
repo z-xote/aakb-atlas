@@ -4,14 +4,21 @@ import type { ProjectType, WorkflowStage } from "@/types/atlas";
 /* Shared vocabulary                                                   */
 /* ------------------------------------------------------------------ */
 
-export const clockPositions = ["12", "3", "6", "9"] as const;
+// Edge midpoints are the true clock spots; the corners take 2/4/8/10 as an
+// intuitive approximation (not chronologically exact) so a camera position can
+// be marked to eight spots instead of four.
+export const clockPositions = ["12", "2", "3", "4", "6", "8", "9", "10"] as const;
 export type ClockPosition = (typeof clockPositions)[number];
 
 export const clockPositionHints: Record<ClockPosition, string> = {
   "12": "At the door",
+  "2": "Front-right corner",
   "3": "Right of the door",
+  "4": "Back-right corner",
   "6": "Facing the door",
+  "8": "Back-left corner",
   "9": "Left of the door",
+  "10": "Front-left corner",
 };
 
 export const roomChoices = [

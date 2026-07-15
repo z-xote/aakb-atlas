@@ -1,9 +1,11 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
+  ArrowLeftIcon,
   ArrowRightIcon,
   CircleDotIcon,
+  CornerDownRightIcon,
   CpuIcon,
   ExternalLinkIcon,
   HardDriveIcon,
@@ -27,7 +29,7 @@ import {
   referencesById,
   type MockGeneration,
 } from "../mock-data";
-import { MockImage, MockTopbar, StatusPill } from "../mock-ui";
+import { MockBottomNav, MockImage, MockTopbar, StatusPill } from "../mock-ui";
 
 /* ------------------------------------------------------------------ */
 /* Anchors                                                             */
@@ -136,17 +138,30 @@ function SystemRow({
 /* ------------------------------------------------------------------ */
 
 function GenerationDetailScreen() {
+  // Two-page flow: the overview shows only before → after. "Open details"
+  // navigates to a separate details page (direction/references/lineage/
+  // system) that has its own back button — not an inline dropdown.
+  const [showDetails, setShowDetails] = useState(false);
+
+  const baseCrumb = ["Hartley — Main Bathroom", "Atlas Image", "Terrazzo floor, warmer light"];
+
   return (
     <div
       className="flex min-h-full flex-1 flex-col"
       style={{ background: "var(--atlas-bg-root)", color: "var(--atlas-text-primary)" }}
     >
       <MockTopbar
-        breadcrumb={["Hartley — Main Bathroom", "Atlas Image", "Terrazzo floor, warmer light"]}
+        breadcrumb={showDetails ? [...baseCrumb, "Details"] : baseCrumb}
+        onBack={showDetails ? () => setShowDetails(false) : undefined}
       />
 
-      <section className="atlas-detail-view">
-        {/* Hero ------------------------------------------------------ */}
+      <section
+        className={`atlas-detail-view flex flex-1 flex-col${
+          showDetails ? "" : " justify-center"
+        }`}
+      >
+        {/* Page 1 — overview: before → after only ------------------- */}
+        {showDetails ? null : (
         <div className="atlas-simple-panel" style={{ boxShadow: "var(--atlas-shadow)" }}>
           <div className="atlas-simple-panel-body">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -217,9 +232,35 @@ function GenerationDetailScreen() {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Details grid --------------------------------------------- */}
-        <div className="mt-4 grid gap-4" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+        {/* Page 2 — details, reached via "Open details" ------------- */}
+        {showDetails ? (
+          <>
+            {/* Back to overview + identity header */}
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0">
+                <button className="atlas-btn atlas-btn-outline h-9 px-3" type="button">
+                  <ExternalLinkIcon className="size-4" />
+                  Open source photo
+                </button>
+                <div className="atlas-eyebrow mt-3 flex items-center gap-1.5">
+                  <LayersIcon className="size-3.5" style={{ color: "var(--atlas-accent)" }} />
+                  Atlas Image · Details
+                </div>
+                <h1 className="mt-1 text-2xl font-bold tracking-normal">{gen.title}</h1>
+                <p className="mt-1 text-sm font-bold" style={{ color: "var(--atlas-text-tertiary)" }}>
+                  {gen.createdAt}
+                </p>
+              </div>
+              <StatusPill tone="green" className="mt-1 shrink-0">
+                <CircleDotIcon className="size-3.5" />
+                Saved
+              </StatusPill>
+            </div>
+
+            {/* Details grid ----------------------------------------- */}
+            <div className="mt-5 grid gap-4" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
           {/* Left column */}
           <div className="grid content-start gap-4">
             {/* Direction */}
@@ -433,49 +474,55 @@ function GenerationDetailScreen() {
               </div>
             </div>
           </div>
-        </div>
+            </div>
+          </>
+        ) : null}
+      </section>
 
-        {/* Sticky action bar ---------------------------------------- */}
-        <div
-          className="sticky bottom-0 z-10 mt-4 flex flex-wrap items-center gap-3 border p-3"
-          style={{
-            borderColor: "var(--atlas-border)",
-            borderRadius: "var(--atlas-radius)",
-            background: "color-mix(in srgb, var(--atlas-bg-surface) 92%, transparent)",
-            backdropFilter: "blur(14px)",
-            boxShadow: "var(--atlas-shadow)",
-          }}
-        >
+      {/* Bottom nav — two big half-and-half actions, swapped per stage.
+          Stage 1: reveal details / continue editing. Stage 2: the source
+          photo + regenerate actions that used to crowd the in-page bar. */}
+      {showDetails ? (
+        <MockBottomNav>
           <button
-            className="atlas-btn atlas-btn-primary h-auto flex-col items-start gap-0.5 px-4 py-2 text-left"
+            className="atlas-btn atlas-btn-outline w-full"
+            onClick={() => setShowDetails(false)}
+            style={{ height: 48, fontSize: 14 }}
             type="button"
           >
-            <span className="inline-flex items-center gap-2 text-sm font-bold">
-              <PencilRulerIcon className="size-4" />
-              Continue editing
-            </span>
-            <span className="text-[11px] font-bold" style={{ opacity: 0.85 }}>
-              Use this result as the next before image
-            </span>
+            <ArrowLeftIcon className="size-4" />
+            Back
           </button>
-
-          <button className="atlas-btn atlas-btn-outline h-11 px-4" type="button">
+          <button
+            className="atlas-btn atlas-btn-primary w-full"
+            style={{ height: 48, fontSize: 14 }}
+            type="button"
+          >
             <RotateCcwIcon />
             Regenerate
           </button>
-
-          <div className="flex-1" />
-
+        </MockBottomNav>
+      ) : (
+        <MockBottomNav>
           <button
-            className="atlas-btn h-11 px-3"
-            style={{ color: "var(--atlas-text-secondary)" }}
+            className="atlas-btn atlas-btn-outline w-full"
+            onClick={() => setShowDetails(true)}
+            style={{ height: 48, fontSize: 14 }}
             type="button"
           >
-            <ExternalLinkIcon />
-            Open source photo
+            <LayersIcon />
+            Open details
           </button>
-        </div>
-      </section>
+          <button
+            className="atlas-btn atlas-btn-primary w-full"
+            style={{ height: 48, fontSize: 14 }}
+            type="button"
+          >
+            <CornerDownRightIcon />
+            Continue editing
+          </button>
+        </MockBottomNav>
+      )}
     </div>
   );
 }
@@ -484,7 +531,7 @@ export const screen: MockupScreen = {
   id: "generation-detail",
   title: "Previous generation detail",
   description:
-    "Opening a past generation from history — inspect its before/after, prompt, references, lineage, and system metadata, then continue editing, regenerate, or open the source photo.",
+    "Opening a past generation from history. Stage one shows just before → after with Open details / Continue editing; Open details reveals the prompt, references, lineage, and system metadata, swapping the nav to Open source photo / Regenerate.",
   viewport: "desktop",
   Component: GenerationDetailScreen,
 };

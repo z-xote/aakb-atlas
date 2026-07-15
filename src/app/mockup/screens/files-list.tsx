@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   CalendarIcon,
   CameraIcon,
+  LibraryBigIcon,
   PlusIcon,
   SearchIcon,
   SparklesIcon,
@@ -143,6 +144,18 @@ function FilesListScreen({ stateId }: { stateId: string }) {
             <span>
               <strong>Any date</strong>
               <small>Filter by created</small>
+            </span>
+          </button>
+          <button
+            className="atlas-catalog-button"
+            onClick={() => {
+              window.location.hash = "reference-catalog";
+            }}
+            type="button"
+          >
+            <LibraryBigIcon />
+            <span>
+              <strong>Reference catalog</strong>
             </span>
           </button>
         </div>

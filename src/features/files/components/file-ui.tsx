@@ -46,6 +46,12 @@ export function AtlasTopbar({
                 )}
               </>
             ) : null}
+            {!fileName && current ? (
+              <>
+                <span>/</span>
+                <span className="atlas-current">{current}</span>
+              </>
+            ) : null}
             {current === "Pipelines" ? (
               <>
                 <span>/</span>
@@ -85,19 +91,20 @@ export function FileBottomNav({
   active,
 }: {
   fileId: string;
-  active: "details" | "pipelines";
+  active: "details" | "images" | "pipelines";
 }) {
+  const leftHref = active === "details" ? `/files/${fileId}/images` : `/files/${fileId}`;
+  const leftLabel = active === "details" ? "Site Images" : "File Details";
+
   return (
     <footer className="atlas-bottom-nav">
       <nav className="atlas-bottom-nav-inner" aria-label="File sections">
         <Link
-          className={cn(
-            "atlas-bottom-nav-item",
-            active === "details" && "atlas-active"
-          )}
-          href={`/files/${fileId}`}
+          className="atlas-bottom-nav-item"
+          href={leftHref}
+          style={{ borderColor: "var(--atlas-accent)", color: "var(--atlas-accent)" }}
         >
-          File Details
+          {leftLabel}
         </Link>
         <Link
           className={cn(
@@ -108,6 +115,22 @@ export function FileBottomNav({
         >
           Pipelines
         </Link>
+      </nav>
+    </footer>
+  );
+}
+
+export function AtlasBottomActions({
+  children,
+  label = "Page actions",
+}: {
+  children: React.ReactNode;
+  label?: string;
+}) {
+  return (
+    <footer className="atlas-bottom-nav">
+      <nav className="atlas-bottom-nav-inner" aria-label={label}>
+        {children}
       </nav>
     </footer>
   );

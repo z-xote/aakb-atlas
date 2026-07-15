@@ -10,6 +10,13 @@ export type MockupScreenState = {
 export type MockupScreenProps = {
   /** Active mock-state id. Always one of the screen's declared states (or "default"). */
   stateId: string;
+  /**
+   * Effective device frame the shell is currently rendering the screen inside.
+   * Both phone frames live inside the same desktop browser viewport, so screens
+   * that must differ by orientation should branch on this rather than on
+   * browser-width media queries. Screens that don't care can ignore it.
+   */
+  viewport: MockupViewport;
 };
 
 export type MockupScreen = {

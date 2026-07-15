@@ -1,11 +1,16 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
+  ArrowLeftIcon,
   ArrowRightIcon,
+  BarChart3Icon,
+  CalendarDaysIcon,
   CornerDownRightIcon,
   FileTextIcon,
+  ImageIcon,
   ImageOffIcon,
+  ImagesIcon,
   LayersIcon,
   PlusIcon,
   RotateCcwIcon,
@@ -14,14 +19,47 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 
+import { pipelineDefinitions } from "@/features/pipelines/registry";
+import { workflowStageLabels } from "@/types/atlas";
+import { cn } from "@/lib/utils";
 import type { MockupScreen } from "../types";
 import {
+  activeFile,
   generationStatusLabels,
   mockGenerations,
   type MockGeneration,
   type MockGenerationStatus,
 } from "../mock-data";
-import { MockImage, MockTopbar, StatusPill, type PillTone } from "../mock-ui";
+import {
+  MockBottomNav,
+  MockImage,
+  MockTopbar,
+  StatusPill,
+  type PillTone,
+} from "../mock-ui";
+
+/* ------------------------------------------------------------------ */
+/* Stage vocabulary                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Frame 10 is a two-stage flow mirroring production:
+ *  - "select"  — the file's pipeline picker (six options; only Atlas Image is live)
+ *  - "atlas"   — the Atlas Image generation history for this file
+ * Tapping the Atlas Image tile crosses into "atlas"; the Back action returns.
+ */
+type Stage = "select" | "atlas";
+
+const pipelineIcons = {
+  atlas_image: ImageIcon,
+  proposal: FileTextIcon,
+  scheduler: CalendarDaysIcon,
+  estimate_builder: BarChart3Icon,
+  image_library: ImagesIcon,
+} as const;
+
+/** Short display name — "Hartley — Main Bathroom" → "Hartley". */
+const fileShortName = activeFile.title.split("—")[0]?.trim() ?? activeFile.title;
 
 /* ------------------------------------------------------------------ */
 /* Status presentation                                                 */
@@ -43,6 +81,84 @@ function hasResult(gen: MockGeneration): gen is MockGeneration & { resultSeed: s
 function refChipLabel(count: number): string {
   if (count === 0) return "No refs";
   return `${count} ref${count === 1 ? "" : "s"}`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Stage 1 — pipeline picker                                           */
+/* ------------------------------------------------------------------ */
+
+function PipelinePicker({ onOpenAtlas }: { onOpenAtlas: () => void }) {
+  return (
+    <section className="atlas-pipelines-view flex-1">
+      <div className="atlas-pipelines-heading">
+        <div className="atlas-heading">
+          <div className="atlas-eyebrow">File pipelines</div>
+          <h1>Choose an action for {fileShortName}</h1>
+          <p className="atlas-subtle">
+            Each button opens a pipeline inside this file. The page is
+            intentionally full-width so pipeline actions have room to breathe on
+            iPad.
+          </p>
+        </div>
+        <StatusPill tone="accent">{workflowStageLabels[activeFile.stage]}</StatusPill>
+      </div>
+
+      <div className="atlas-pipeline-button-grid">
+        {pipelineDefinitions.map((pipeline) => {
+          const Icon = pipelineIcons[pipeline.key];
+          const isAtlas = pipeline.key === "atlas_image";
+          const content = (
+            <>
+              <span
+                className={cn(
+                  "atlas-pipeline-action-icon",
+                  pipeline.iconTone === "blue" && "atlas-pipeline-action-icon-blue",
+                  pipeline.iconTone === "green" && "atlas-pipeline-action-icon-green",
+                  pipeline.iconTone === "amber" && "atlas-pipeline-action-icon-amber"
+                )}
+              >
+                <Icon />
+              </span>
+              <span className="atlas-pipeline-action-copy">
+                <strong>{pipeline.name}</strong>
+                <span>{pipeline.summary}</span>
+              </span>
+              <StatusPill tone={pipeline.tone}>{pipeline.status}</StatusPill>
+            </>
+          );
+
+          if (isAtlas) {
+            return (
+              <button
+                className="atlas-pipeline-action atlas-pipeline-action-primary text-left"
+                key={pipeline.key}
+                onClick={onOpenAtlas}
+                type="button"
+              >
+                {content}
+              </button>
+            );
+          }
+
+          return (
+            <div className="atlas-pipeline-action" key={pipeline.key}>
+              {content}
+            </div>
+          );
+        })}
+
+        <div className="atlas-pipeline-action atlas-pipeline-action-add">
+          <span className="atlas-pipeline-action-icon">
+            <PlusIcon />
+          </span>
+          <span className="atlas-pipeline-action-copy">
+            <strong>Add custom pipeline</strong>
+            <span>Create another action button for this file type later.</span>
+          </span>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -221,14 +337,19 @@ function HistoryRow({
 }
 
 /* ------------------------------------------------------------------ */
-/* Header + secondary lane                                             */
+/* Stage 2 — Atlas Image generation history                            */
 /* ------------------------------------------------------------------ */
 
-function AtlasImageHeader() {
+function AtlasImageStage({ isEmpty }: { isEmpty: boolean }) {
+  const parentTitles = useMemo(
+    () => new Map(mockGenerations.map((gen) => [gen.id, gen.title])),
+    []
+  );
+
   return (
-    <div className="atlas-pipelines-heading">
-      <div className="atlas-heading">
-        <div className="atlas-eyebrow">Pipelines</div>
+    <section className="atlas-pipelines-view flex-1">
+      <div className="atlas-heading mb-5">
+        <div className="atlas-eyebrow">Pipelines · Atlas Image</div>
         <h1 className="flex items-center gap-2">
           <SparklesIcon
             className="size-6 shrink-0"
@@ -241,32 +362,56 @@ function AtlasImageHeader() {
           from it, or start fresh.
         </p>
       </div>
-      <button className="atlas-btn atlas-btn-primary h-11 px-5 text-base" type="button">
-        <PlusIcon />
-        New Generation
-      </button>
-    </div>
-  );
-}
 
-function OtherPipelinesLane() {
-  return (
-    <div className="mt-6">
-      <div className="atlas-eyebrow mb-2">Other pipelines</div>
-      <div className="atlas-pipeline-action atlas-pipeline-action-add">
-        <span className="atlas-pipeline-action-icon">
-          <FileTextIcon />
-        </span>
-        <span className="atlas-pipeline-action-copy">
-          <strong>Proposal — coming later</strong>
-          <span>
-            Turn accepted concepts into a client-ready document. Not part of this
-            pass.
+      {isEmpty ? (
+        <div
+          className="grid place-items-center gap-3 border border-dashed px-6 py-14 text-center"
+          style={{
+            borderColor: "color-mix(in srgb, var(--atlas-accent) 40%, var(--atlas-border))",
+            borderRadius: "var(--atlas-radius)",
+            background:
+              "linear-gradient(145deg, color-mix(in srgb, var(--atlas-accent-soft) 70%, transparent), transparent 62%), var(--atlas-bg-surface)",
+          }}
+        >
+          <span
+            className="grid size-14 place-items-center rounded-full"
+            style={{
+              background: "var(--atlas-accent-soft)",
+              color: "var(--atlas-accent)",
+            }}
+          >
+            <SparklesIcon className="size-7" />
           </span>
-        </span>
-        <StatusPill tone="muted">Later</StatusPill>
-      </div>
-    </div>
+          <h2 className="text-xl font-bold tracking-normal">No generations yet</h2>
+          <p
+            className="max-w-md text-sm leading-relaxed"
+            style={{ color: "var(--atlas-text-secondary)" }}
+          >
+            Pick a before photo, describe the change you want, and add a few
+            references. Every result is saved here the moment it finishes.
+          </p>
+          <button
+            className="atlas-btn atlas-btn-primary mt-1 h-11 px-5 text-base"
+            type="button"
+          >
+            <PlusIcon />
+            New Generation
+          </button>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {mockGenerations.map((gen) => (
+            <HistoryRow
+              gen={gen}
+              key={gen.id}
+              parentTitle={
+                gen.parentId ? parentTitles.get(gen.parentId) : undefined
+              }
+            />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -276,11 +421,12 @@ function OtherPipelinesLane() {
 
 function PipelinesScreen({ stateId }: { stateId: string }) {
   const isEmpty = stateId === "empty";
+  const [stage, setStage] = useState<Stage>("select");
 
-  const parentTitles = useMemo(() => {
-    const byId = new Map(mockGenerations.map((gen) => [gen.id, gen.title]));
-    return byId;
-  }, []);
+  const breadcrumb =
+    stage === "select"
+      ? ["Files", activeFile.title, "Pipelines"]
+      : ["Files", activeFile.title, "Atlas Image"];
 
   return (
     <div
@@ -290,62 +436,59 @@ function PipelinesScreen({ stateId }: { stateId: string }) {
         color: "var(--atlas-text-primary)",
       }}
     >
-      <MockTopbar breadcrumb={["Files", "Hartley — Main Bathroom", "Pipelines"]} />
+      <MockTopbar breadcrumb={breadcrumb} />
 
-      <section className="atlas-pipelines-view">
-        <AtlasImageHeader />
+      {stage === "select" ? (
+        <>
+          <PipelinePicker onOpenAtlas={() => setStage("atlas")} />
 
-        {isEmpty ? (
-          <div
-            className="grid place-items-center gap-3 border border-dashed px-6 py-14 text-center"
-            style={{
-              borderColor: "color-mix(in srgb, var(--atlas-accent) 40%, var(--atlas-border))",
-              borderRadius: "var(--atlas-radius)",
-              background:
-                "linear-gradient(145deg, color-mix(in srgb, var(--atlas-accent-soft) 70%, transparent), transparent 62%), var(--atlas-bg-surface)",
-            }}
-          >
-            <span
-              className="grid size-14 place-items-center rounded-full"
-              style={{
-                background: "var(--atlas-accent-soft)",
-                color: "var(--atlas-accent)",
-              }}
-            >
-              <SparklesIcon className="size-7" />
-            </span>
-            <h2 className="text-xl font-bold tracking-normal">No generations yet</h2>
-            <p
-              className="max-w-md text-sm leading-relaxed"
-              style={{ color: "var(--atlas-text-secondary)" }}
-            >
-              Pick a before photo, describe the change you want, and add a few
-              references. Every result is saved here the moment it finishes.
-            </p>
+          {/* Production file bottom nav — File Details / Pipelines tabs */}
+          <MockBottomNav>
             <button
-              className="atlas-btn atlas-btn-primary mt-1 h-11 px-5 text-base"
+              className="atlas-bottom-nav-item w-full"
+              onClick={() => {
+                window.location.hash = "file-details";
+              }}
+              style={{ height: 48 }}
               type="button"
             >
-              <PlusIcon />
+              File Details
+            </button>
+            <button
+              className="atlas-bottom-nav-item atlas-active w-full"
+              style={{ height: 48 }}
+              type="button"
+            >
+              Pipelines
+            </button>
+          </MockBottomNav>
+        </>
+      ) : (
+        <>
+          <AtlasImageStage isEmpty={isEmpty} />
+
+          {/* Atlas Image bottom nav — Back to pipelines / start a generation */}
+          <MockBottomNav>
+            <button
+              className="atlas-btn atlas-btn-outline w-full"
+              onClick={() => setStage("select")}
+              style={{ height: 48, fontSize: 14 }}
+              type="button"
+            >
+              <ArrowLeftIcon className="size-4" />
+              Back
+            </button>
+            <button
+              className="atlas-btn atlas-btn-primary w-full"
+              style={{ height: 48, fontSize: 14 }}
+              type="button"
+            >
+              <PlusIcon aria-hidden="true" />
               New Generation
             </button>
-          </div>
-        ) : (
-          <div className="grid gap-3">
-            {mockGenerations.map((gen) => (
-              <HistoryRow
-                gen={gen}
-                key={gen.id}
-                parentTitle={
-                  gen.parentId ? parentTitles.get(gen.parentId) : undefined
-                }
-              />
-            ))}
-          </div>
-        )}
-
-        <OtherPipelinesLane />
-      </section>
+          </MockBottomNav>
+        </>
+      )}
     </div>
   );
 }
@@ -354,7 +497,7 @@ export const screen: MockupScreen = {
   id: "pipelines",
   title: "Pipelines & generation history",
   description:
-    "Atlas Image for one file — a chronological history of every generation with explicit saved, blocked, failed, and retryable states.",
+    "The file's pipeline picker — six options, only Atlas Image is live. Tapping it crosses into the Atlas Image generation history, with its own Back / New Generation bottom nav.",
   viewport: "desktop",
   states: [
     { id: "history", label: "With history" },

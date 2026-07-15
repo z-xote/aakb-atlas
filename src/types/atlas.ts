@@ -42,6 +42,38 @@ export const jobTypes = [
 ] as const;
 
 export const fileImageKinds = ["site_visit", "ai_generated"] as const;
+export const fileAssetStatuses = ["pending", "ready", "failed"] as const;
+export const fileAssetOrigins = ["camera", "upload", "generated"] as const;
+export const clockPositions = ["12", "2", "3", "4", "6", "8", "9", "10"] as const;
+export const atlasImageQualities = ["medium", "high"] as const;
+export const atlasImageGenerationStatuses = [
+  "generating",
+  "complete",
+  "retryable",
+  "blocked",
+  "failed",
+  "cancelled",
+] as const;
+
+export const clockPositionHints: Record<ClockPosition, string> = {
+  "12": "At the door",
+  "2": "Front-right corner",
+  "3": "Right of the door",
+  "4": "Back-right corner",
+  "6": "Opposite the door / back wall",
+  "8": "Back-left corner",
+  "9": "Left of the door",
+  "10": "Front-left corner",
+};
+
+export const roomChoices = [
+  "Kitchen",
+  "Bathroom",
+  "Ensuite",
+  "Laundry",
+  "Powder room",
+  "Walk-in robe",
+] as const;
 
 export type RelationshipStatus = (typeof relationshipStatuses)[number];
 export type WorkflowStage = (typeof workflowStages)[number];
@@ -49,6 +81,11 @@ export type ProjectType = (typeof projectTypes)[number];
 export type BudgetRange = (typeof budgetRanges)[number];
 export type JobType = (typeof jobTypes)[number];
 export type FileImageKind = (typeof fileImageKinds)[number];
+export type FileAssetStatus = (typeof fileAssetStatuses)[number];
+export type FileAssetOrigin = (typeof fileAssetOrigins)[number];
+export type ClockPosition = (typeof clockPositions)[number];
+export type AtlasImageQuality = (typeof atlasImageQualities)[number];
+export type AtlasImageGenerationStatus = (typeof atlasImageGenerationStatuses)[number];
 
 export const relationshipStatusLabels: Record<RelationshipStatus, string> = {
   prospect: "Prospect",

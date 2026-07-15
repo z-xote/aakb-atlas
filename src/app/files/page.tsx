@@ -1,6 +1,6 @@
 import { AtlasTopbar } from "@/features/files/components/file-ui";
 import { FilesBoard } from "@/features/files/components/files-board";
-import { listFiles } from "@/features/files/data";
+import { getFileDetail, listFiles } from "@/features/files/data";
 import { requireAuth } from "@/services/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 export default async function FilesPage() {
   await requireAuth();
   const fileRows = await listFiles();
-  const files = fileRows.map(({ file, contact }) => ({
+  const details = await Promise.all(fileRows.map(({ file }) => getFileDetail(file.id)));
+  const files = fileRows.map(({ file, contact }, index) => ({
     id: file.id,
     title: file.title,
     contactName: contact?.name ?? null,
@@ -17,6 +18,8 @@ export default async function FilesPage() {
     projectType: file.projectType,
     budgetRange: file.budgetRange,
     createdAt: file.createdAt,
+    imageCount: details[index]?.assets.filter((asset) => Boolean(asset.url)).length ?? 0,
+    conceptCount: details[index]?.assets.filter((asset) => asset.kind === "ai_generated" && Boolean(asset.url)).length ?? 0,
   }));
 
   return (

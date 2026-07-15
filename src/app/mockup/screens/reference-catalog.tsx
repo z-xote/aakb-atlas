@@ -105,7 +105,6 @@ function ReferenceCatalogScreen({ stateId }: { stateId: string }) {
         {/* Header */}
         <div className="atlas-files-heading">
           <div className="atlas-heading">
-            <div className="atlas-eyebrow">Company library</div>
             <h1>Reference catalog</h1>
             <p className="atlas-subtle">
               {mockReferences.length} references · {referenceCategories.length}{" "}

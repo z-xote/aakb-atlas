@@ -1,63 +1,48 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
-
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { isProduction } from "@/services/env";
+import { findActiveSession, revokeSessionToken, touchSession } from "@/services/auth/device";
 import { getAuthEnv } from "@/services/auth/env";
+import { isProduction } from "@/services/env";
 
-function makeSessionValue() {
-  const { authSecret, sharedPassword } = getAuthEnv();
-
-  return createHmac("sha256", authSecret)
-    .update(`atlas:${sharedPassword}`)
-    .digest("hex");
+export async function getSessionToken() {
+  const cookieStore = await cookies();
+  return cookieStore.get(getAuthEnv().cookieName)?.value ?? null;
 }
 
-function safeEquals(a: string, b: string) {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return timingSafeEqual(left, right);
+export async function getAuthenticatedSession() {
+  const token = await getSessionToken();
+  return token ? findActiveSession(token) : null;
 }
 
 export async function isAuthenticated() {
-  const { cookieName } = getAuthEnv();
-  const cookieStore = await cookies();
-  const value = cookieStore.get(cookieName)?.value;
-
-  return Boolean(value && safeEquals(value, makeSessionValue()));
+  return Boolean(await getAuthenticatedSession());
 }
 
 export async function requireAuth() {
-  if (!(await isAuthenticated())) {
-    redirect("/login");
-  }
+  const session = await getAuthenticatedSession();
+  if (!session) redirect("/login");
+  return session;
 }
 
-export async function setAuthSession() {
-  const { cookieName } = getAuthEnv();
+export async function setDeviceSessionCookie(token: string) {
   const cookieStore = await cookies();
-
-  cookieStore.set(cookieName, makeSessionValue(), {
+  cookieStore.set(getAuthEnv().cookieName, token, {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: isProduction(),
     path: "/",
+    priority: "high",
   });
 }
 
 export async function clearAuthSession() {
-  const { cookieName } = getAuthEnv();
-  const cookieStore = await cookies();
-
-  cookieStore.delete(cookieName);
+  const token = await getSessionToken();
+  if (token) await revokeSessionToken(token);
+  (await cookies()).delete(getAuthEnv().cookieName);
 }
 
-export function passwordMatches(value: string) {
-  return safeEquals(value, getAuthEnv().sharedPassword);
+export async function touchCurrentSession() {
+  const token = await getSessionToken();
+  return token ? touchSession(token) : null;
 }

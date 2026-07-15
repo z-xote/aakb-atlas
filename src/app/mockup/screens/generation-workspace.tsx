@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  ArrowLeftIcon,
   CheckIcon,
   MicIcon,
   RefreshCwIcon,
   SendHorizontalIcon,
   SparklesIcon,
   SquareIcon,
-  Trash2Icon,
   XIcon,
 } from "lucide-react";
 
@@ -19,7 +19,7 @@ import {
   referenceCategories,
   type MockReference,
 } from "../mock-data";
-import { MockImage, MockTopbar } from "../mock-ui";
+import { MockBottomNav, MockImage, MockTopbar } from "../mock-ui";
 
 /* ------------------------------------------------------------------ */
 /* Static screen copy                                                  */
@@ -56,76 +56,83 @@ const thread: Array<{
   },
 ];
 
-const stages = [
-  { n: 1, label: "Source", status: "done" as const },
-  { n: 2, label: "Direction & references", status: "active" as const },
-  { n: 3, label: "Generate", status: "todo" as const },
-];
-
 /* deterministic waveform for the recording bar */
 const waveform = Array.from({ length: 20 }, (_, i) =>
   28 + Math.round(Math.abs(Math.sin(i * 1.35 + 0.6)) * 64)
 );
 
 /* ------------------------------------------------------------------ */
-/* Stage strip                                                         */
+/* DragScrollRow — grab-and-drag horizontal canvas, no visible bar     */
 /* ------------------------------------------------------------------ */
 
-function StageStrip() {
+/**
+ * A horizontally-scrollable row you pan by dragging (mouse or touch)
+ * instead of a scrollbar. The native bar is hidden via
+ * `.atlas-no-scrollbar`; the click that ends a drag is swallowed so a
+ * mid-swipe release never toggles the item underneath.
+ */
+function DragScrollRow({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const drag = useRef({ active: false, startX: 0, startLeft: 0, moved: false });
+
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const el = ref.current;
+    if (!el) return;
+    drag.current = {
+      active: true,
+      startX: event.clientX,
+      startLeft: el.scrollLeft,
+      moved: false,
+    };
+    el.setPointerCapture(event.pointerId);
+  };
+
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const el = ref.current;
+    if (!el || !drag.current.active) return;
+    const dx = event.clientX - drag.current.startX;
+    if (Math.abs(dx) > 3) drag.current.moved = true;
+    el.scrollLeft = drag.current.startLeft - dx;
+  };
+
+  const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    drag.current.active = false;
+    try {
+      ref.current?.releasePointerCapture(event.pointerId);
+    } catch {
+      // pointer was never captured — nothing to release
+    }
+  };
+
+  const onClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (drag.current.moved) {
+      event.preventDefault();
+      event.stopPropagation();
+      drag.current.moved = false;
+    }
+  };
+
   return (
     <div
-      className="flex items-center gap-1 overflow-x-auto rounded-lg border px-4 py-3"
-      style={{
-        borderColor: "var(--atlas-border)",
-        background: "var(--atlas-bg-surface)",
-      }}
+      className={cn(
+        "atlas-no-scrollbar cursor-grab overflow-x-auto active:cursor-grabbing",
+        className
+      )}
+      onClickCapture={onClickCapture}
+      onPointerDown={onPointerDown}
+      onPointerLeave={endDrag}
+      onPointerMove={onPointerMove}
+      onPointerUp={endDrag}
+      ref={ref}
+      style={{ touchAction: "pan-y", scrollbarWidth: "none" }}
     >
-      {stages.map((stage, index) => {
-        const isActive = stage.status === "active";
-        const isDone = stage.status === "done";
-        return (
-          <div className="flex items-center gap-1" key={stage.n}>
-            <div className="flex shrink-0 items-center gap-2.5">
-              <span
-                className="grid size-6 place-items-center rounded-full text-xs font-bold"
-                style={{
-                  background: isActive
-                    ? "var(--atlas-accent)"
-                    : isDone
-                      ? "var(--atlas-accent-soft)"
-                      : "var(--atlas-bg-muted)",
-                  color: isActive
-                    ? "#ffffff"
-                    : isDone
-                      ? "var(--atlas-accent)"
-                      : "var(--atlas-text-tertiary)",
-                }}
-              >
-                {isDone ? <CheckIcon className="size-3.5" /> : stage.n}
-              </span>
-              <span
-                className="whitespace-nowrap text-sm font-bold"
-                style={{
-                  color: isActive
-                    ? "var(--atlas-accent)"
-                    : isDone
-                      ? "var(--atlas-text-primary)"
-                      : "var(--atlas-text-tertiary)",
-                }}
-              >
-                {stage.label}
-              </span>
-            </div>
-            {index < stages.length - 1 ? (
-              <span
-                aria-hidden="true"
-                className="mx-3 h-px w-8 shrink-0"
-                style={{ background: "var(--atlas-border-strong)" }}
-              />
-            ) : null}
-          </div>
-        );
-      })}
+      {children}
     </div>
   );
 }
@@ -202,59 +209,6 @@ function RecordingBar() {
   );
 }
 
-function TranscriptCard({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  return (
-    <div
-      className="mb-3 flex flex-col gap-2 rounded-lg border p-3"
-      style={{
-        borderColor: "var(--atlas-accent-muted)",
-        background: "var(--atlas-accent-soft)",
-      }}
-    >
-      <span
-        className="text-[11px] font-bold uppercase tracking-normal"
-        style={{ color: "var(--atlas-accent)" }}
-      >
-        Voice transcript — edit before sending
-      </span>
-      <textarea
-        className="min-h-20 w-full resize-none rounded-md border px-3 py-2 text-sm outline-none"
-        onChange={(event) => onChange(event.target.value)}
-        style={{
-          borderColor: "var(--atlas-border-strong)",
-          background: "var(--atlas-bg-surface)",
-          color: "var(--atlas-text-primary)",
-        }}
-        value={value}
-      />
-      <div className="flex items-center justify-end gap-2">
-        <button
-          className="atlas-btn"
-          style={{ height: 34, color: "var(--atlas-text-secondary)" }}
-          type="button"
-        >
-          <Trash2Icon className="size-3.5" />
-          Discard
-        </button>
-        <button
-          className="atlas-btn atlas-btn-primary"
-          style={{ height: 34 }}
-          type="button"
-        >
-          <SendHorizontalIcon className="size-3.5" />
-          Send as direction
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function Composer({
   value,
   onChange,
@@ -305,8 +259,11 @@ function Composer({
 }
 
 function ChatPanel({ stateId }: { stateId: string }) {
-  const [message, setMessage] = useState("");
-  const [transcript, setTranscript] = useState(TRANSCRIPT_DRAFT);
+  // When recording stops, OpenAI's transcript lands straight in the composer —
+  // no separate review card, just edit-and-send from the input bar.
+  const [message, setMessage] = useState(
+    stateId === "transcript" ? TRANSCRIPT_DRAFT : ""
+  );
 
   return (
     <section className="atlas-simple-panel flex min-h-0 flex-col">
@@ -396,12 +353,7 @@ function ChatPanel({ stateId }: { stateId: string }) {
         {stateId === "recording" ? (
           <RecordingBar />
         ) : (
-          <>
-            {stateId === "transcript" ? (
-              <TranscriptCard value={transcript} onChange={setTranscript} />
-            ) : null}
-            <Composer value={message} onChange={setMessage} />
-          </>
+          <Composer value={message} onChange={setMessage} />
         )}
       </div>
     </section>
@@ -491,7 +443,7 @@ function ReferencesPanel({
         className="border-b px-3 py-2.5"
         style={{ borderColor: "var(--atlas-border)" }}
       >
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+        <DragScrollRow className="flex gap-1.5 pb-0.5">
           {referenceCategories.map((category) => {
             const active = category.slug === activeCategory;
             const count = mockReferences.filter(
@@ -523,7 +475,7 @@ function ReferencesPanel({
               </button>
             );
           })}
-        </div>
+        </DragScrollRow>
       </div>
 
       {/* Reference grid */}
@@ -621,8 +573,6 @@ function GenerationWorkspaceScreen({ stateId }: MockupScreenProps) {
       <MockTopbar breadcrumb={["Hartley — Main Bathroom", "Atlas Image"]} />
 
       <main className="atlas-frame flex flex-1 flex-col gap-4 py-6">
-        <StageStrip />
-
         <div
           className="grid min-h-0 flex-1 gap-4"
           style={{
@@ -633,29 +583,27 @@ function GenerationWorkspaceScreen({ stateId }: MockupScreenProps) {
           <ChatPanel stateId={stateId} />
           <ReferencesPanel onToggle={toggle} selected={selected} />
         </div>
-
-        {/* Footer bar spanning both columns */}
-        <div
-          className="flex flex-wrap items-center justify-between gap-4 rounded-lg border px-4 py-3"
-          style={{
-            borderColor: "var(--atlas-border)",
-            background: "var(--atlas-bg-surface)",
-          }}
-        >
-          <p className="text-sm font-bold" style={{ color: "var(--atlas-text-secondary)" }}>
-            1 before photo · {selected.length} reference{selected.length === 1 ? "" : "s"} · 1
-            concept will be generated
-          </p>
-          <button
-            className="atlas-btn atlas-btn-primary"
-            style={{ height: 44, paddingInline: 22, fontSize: 14 }}
-            type="button"
-          >
-            <SparklesIcon className="size-4" />
-            Generate concept
-          </button>
-        </div>
       </main>
+
+      {/* Sticky, full-width bottom nav — Back on the left, Generate on the right */}
+      <MockBottomNav>
+        <button
+          className="atlas-btn atlas-btn-outline w-full"
+          style={{ height: 48, fontSize: 14 }}
+          type="button"
+        >
+          <ArrowLeftIcon className="size-4" />
+          Back
+        </button>
+        <button
+          className="atlas-btn atlas-btn-primary w-full"
+          style={{ height: 48, fontSize: 14 }}
+          type="button"
+        >
+          <SparklesIcon className="size-4" />
+          Generate concept
+        </button>
+      </MockBottomNav>
     </div>
   );
 }
@@ -669,7 +617,7 @@ export const screen: MockupScreen = {
   states: [
     { id: "idle", label: "Typing" },
     { id: "recording", label: "Recording voice" },
-    { id: "transcript", label: "Transcript ready" },
+    { id: "transcript", label: "Transcript in bar" },
   ],
   Component: GenerationWorkspaceScreen,
 };

@@ -8,15 +8,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import {
-  budgetRanges,
   fileImageKindLabels,
   fileImageKinds,
-  jobTypes,
-  projectTypes,
-  relationshipStatuses,
-  workflowStages,
   type FileImageKind,
 } from "@/types/atlas";
+import { fileCompletionRoute, fileFormSchema } from "@/features/files/schemas";
 import { requireAuth } from "@/services/auth/session";
 import {
   addFileAsset,
@@ -25,20 +21,6 @@ import {
   deleteFile,
   updateFile,
 } from "@/features/files/data";
-
-const fileFormSchema = z.object({
-  title: z.string().trim().min(1),
-  relationshipStatus: z.enum(relationshipStatuses),
-  workflowStage: z.enum(workflowStages),
-  projectType: z.enum(projectTypes),
-  budgetRange: z.enum(budgetRanges),
-  jobType: z.enum(jobTypes),
-  leadSource: z.string().trim(),
-  contactName: z.string().trim().min(1),
-  contactEmail: z.string().trim(),
-  contactPhone: z.string().trim(),
-  note: z.string().trim(),
-});
 
 const noteSchema = z.object({
   body: z.string().trim().min(1),
@@ -91,9 +73,10 @@ function safeFilename(name: string) {
 export async function createFileAction(formData: FormData) {
   await requireAuth();
   const id = await createFile(parseFileForm(formData));
+  const completionIntent = text(formData, "completionIntent");
 
   revalidatePath("/files");
-  redirect(`/files/${id}`);
+  redirect(fileCompletionRoute(id, completionIntent));
 }
 
 export async function updateFileAction(id: string, formData: FormData) {

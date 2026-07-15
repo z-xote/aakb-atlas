@@ -1,8 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
-  AlertTriangleIcon,
   ArrowRightIcon,
   CheckIcon,
   ClockIcon,
@@ -23,7 +22,7 @@ import {
   type MockGeneration,
   type MockReference,
 } from "../mock-data";
-import { MockImage, MockTopbar, StatusPill } from "../mock-ui";
+import { MockBottomNav, MockImage, MockTopbar, StatusPill } from "../mock-ui";
 
 /* ------------------------------------------------------------------ */
 /* Data                                                                */
@@ -46,62 +45,6 @@ const imageRadius = "calc(var(--atlas-radius) * 1.5)";
 /* ------------------------------------------------------------------ */
 /* Small shared pieces                                                 */
 /* ------------------------------------------------------------------ */
-
-function StageStrip() {
-  const stages = [
-    { n: 1, label: "Source" },
-    { n: 2, label: "Direction & references" },
-    { n: 3, label: "Generate" },
-  ];
-
-  return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-      {stages.map((stage, index) => {
-        const done = stage.n < 3;
-        const active = stage.n === 3;
-        return (
-          <span className="flex items-center gap-2" key={stage.n}>
-            {index > 0 ? (
-              <span
-                aria-hidden="true"
-                className="mx-1 h-px w-6"
-                style={{ background: "var(--atlas-border-strong)" }}
-              />
-            ) : null}
-            <span
-              className="grid size-6 place-items-center rounded-full text-xs font-bold"
-              style={{
-                background: done
-                  ? "var(--atlas-accent)"
-                  : active
-                    ? "var(--atlas-accent-soft)"
-                    : "var(--atlas-bg-muted)",
-                border: active ? "1px solid var(--atlas-accent)" : "1px solid transparent",
-                color: done
-                  ? "#ffffff"
-                  : active
-                    ? "var(--atlas-accent)"
-                    : "var(--atlas-text-tertiary)",
-              }}
-            >
-              {done ? <CheckIcon className="size-3.5" /> : stage.n}
-            </span>
-            <span
-              className="text-sm font-bold"
-              style={{
-                color: active
-                  ? "var(--atlas-text-primary)"
-                  : "var(--atlas-text-tertiary)",
-              }}
-            >
-              {stage.label}
-            </span>
-          </span>
-        );
-      })}
-    </div>
-  );
-}
 
 function PromptBlock({ prompt }: { prompt: string }) {
   return (
@@ -213,11 +156,18 @@ function GeneratingState() {
         className="grid items-start gap-5"
         style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.05fr)" }}
       >
-        <div className="flex flex-col gap-2">
-          <BeforeImage seed={completeGen.sourceSeed} />
-          <p className="atlas-muted text-xs font-bold">
-            {completeGen.sourceLabel}
-          </p>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <BeforeImage seed={completeGen.sourceSeed} />
+            <p className="atlas-muted text-xs font-bold">
+              {completeGen.sourceLabel}
+            </p>
+          </div>
+
+          {/* Direction + references tucked under the before image to
+              reclaim the empty column and keep the card short. */}
+          <PromptBlock prompt={completeGen.prompt} />
+          <ReferenceRow references={references} compact />
         </div>
 
         <div className="flex flex-col gap-4">
@@ -267,19 +217,9 @@ function GeneratingState() {
             </div>
           </div>
 
-          <PromptBlock prompt={completeGen.prompt} />
-          <ReferenceRow references={references} compact />
-
           <p className="atlas-muted text-xs font-bold">
             Usually 20–40 seconds · saved automatically when done
           </p>
-
-          <div>
-            <button className="atlas-btn atlas-btn-outline" type="button">
-              <XIcon />
-              Cancel
-            </button>
-          </div>
         </div>
       </div>
     </SectionCard>
@@ -352,25 +292,16 @@ function CompleteState() {
       <PromptBlock prompt={completeGen.prompt} />
       <ReferenceRow references={references} />
 
-      {/* Action bar */}
+      {/* Secondary context — Continue editing / Finish live in the bottom nav */}
       <div
-        className="flex flex-wrap items-start gap-3 border-t pt-5"
+        className="flex flex-wrap items-center justify-between gap-3 border-t pt-5"
         style={{ borderColor: "var(--atlas-border)" }}
       >
-        <div className="flex flex-col gap-1">
-          <button className="atlas-btn atlas-btn-primary h-10! px-4" type="button">
-            <CornerDownRightIcon />
-            Continue editing
-          </button>
-          <span className="atlas-muted text-xs font-bold">
-            Makes this the next before image
-          </span>
-        </div>
-        <button className="atlas-btn atlas-btn-outline h-10! px-4" type="button">
-          Finish
-        </button>
+        <p className="atlas-muted text-xs font-bold">
+          Saved to File images · Continue editing makes this the next before image.
+        </p>
         <button
-          className="atlas-btn h-10! px-3"
+          className="atlas-btn h-9! px-3"
           style={{ color: "var(--atlas-text-secondary)" }}
           type="button"
         >
@@ -378,10 +309,6 @@ function CompleteState() {
           Open in file
         </button>
       </div>
-
-      <p className="atlas-muted text-xs font-bold">
-        Saved to File images and generation history.
-      </p>
     </SectionCard>
   );
 }
@@ -396,14 +323,12 @@ function OutcomeState({
   icon,
   pillLabel,
   pillTone,
-  actions,
 }: {
   gen: MockGeneration;
   tone: string;
   icon: ReactNode;
   pillLabel: string;
   pillTone: "amber" | "destructive";
-  actions: ReactNode;
 }) {
   const references = referencesById(gen.referenceIds);
 
@@ -457,13 +382,6 @@ function OutcomeState({
 
       <PromptBlock prompt={gen.prompt} />
       <ReferenceRow references={references} />
-
-      <div
-        className="flex flex-wrap items-center gap-3 border-t pt-5"
-        style={{ borderColor: "var(--atlas-border)" }}
-      >
-        {actions}
-      </div>
     </SectionCard>
   );
 }
@@ -476,18 +394,6 @@ function RetryableState() {
       pillLabel="Retry available"
       pillTone="amber"
       icon={<ClockIcon className="size-5" />}
-      actions={
-        <>
-          <button className="atlas-btn atlas-btn-primary h-10! px-4" type="button">
-            <RotateCcwIcon />
-            Retry generation
-          </button>
-          <button className="atlas-btn atlas-btn-outline h-10! px-4" type="button">
-            <SlidersHorizontalIcon />
-            Edit direction
-          </button>
-        </>
-      }
     />
   );
 }
@@ -500,23 +406,79 @@ function BlockedState() {
       pillLabel="Blocked"
       pillTone="destructive"
       icon={<ShieldAlertIcon className="size-5" />}
-      actions={
-        <>
-          <button className="atlas-btn atlas-btn-primary h-10! px-4" type="button">
-            <SlidersHorizontalIcon />
-            Rephrase direction
-          </button>
-          <button
-            className="atlas-btn h-10! px-3"
-            style={{ color: "var(--atlas-text-secondary)" }}
-            type="button"
-          >
-            <HistoryIcon />
-            Back to history
-          </button>
-        </>
-      }
     />
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Terminal actions — the big half-and-half decisions per state        */
+/* ------------------------------------------------------------------ */
+
+function ResultBottomNav({ stateId }: { stateId: string }) {
+  const bigBtn: CSSProperties = { height: 48, fontSize: 14 };
+
+  if (stateId === "complete") {
+    return (
+      <MockBottomNav>
+        <button className="atlas-btn atlas-btn-outline w-full" style={bigBtn} type="button">
+          <CornerDownRightIcon />
+          Continue editing
+        </button>
+        <button className="atlas-btn atlas-btn-primary w-full" style={bigBtn} type="button">
+          <CheckIcon className="size-4" />
+          Finish
+        </button>
+      </MockBottomNav>
+    );
+  }
+
+  if (stateId === "retryable") {
+    return (
+      <MockBottomNav>
+        <button className="atlas-btn atlas-btn-outline w-full" style={bigBtn} type="button">
+          <SlidersHorizontalIcon />
+          Edit direction
+        </button>
+        <button className="atlas-btn atlas-btn-primary w-full" style={bigBtn} type="button">
+          <RotateCcwIcon />
+          Retry generation
+        </button>
+      </MockBottomNav>
+    );
+  }
+
+  if (stateId === "blocked") {
+    return (
+      <MockBottomNav>
+        <button className="atlas-btn atlas-btn-outline w-full" style={bigBtn} type="button">
+          <HistoryIcon />
+          Back to history
+        </button>
+        <button className="atlas-btn atlas-btn-primary w-full" style={bigBtn} type="button">
+          <SlidersHorizontalIcon />
+          Rephrase direction
+        </button>
+      </MockBottomNav>
+    );
+  }
+
+  // Generating — a single, full-width red outlined Cancel spanning both halves.
+  return (
+    <MockBottomNav>
+      <button
+        className="atlas-btn col-span-2 w-full"
+        style={{
+          ...bigBtn,
+          border: "1px solid var(--destructive)",
+          background: "transparent",
+          color: "var(--destructive)",
+        }}
+        type="button"
+      >
+        <XIcon />
+        Cancel generation
+      </button>
+    </MockBottomNav>
   );
 }
 
@@ -524,39 +486,7 @@ function BlockedState() {
 /* Screen                                                              */
 /* ------------------------------------------------------------------ */
 
-function statusHint(stateId: string): { text: string; icon: ReactNode } {
-  switch (stateId) {
-    case "complete":
-      return {
-        text: "Concept saved automatically",
-        icon: <CheckIcon className="size-4" style={{ color: "var(--atlas-green)" }} />,
-      };
-    case "retryable":
-      return {
-        text: "The request can be retried as-is",
-        icon: (
-          <AlertTriangleIcon
-            className="size-4"
-            style={{ color: "var(--atlas-amber)" }}
-          />
-        ),
-      };
-    case "blocked":
-      return {
-        text: "Provider declined this prompt",
-        icon: <ShieldAlertIcon className="size-4" style={{ color: "var(--destructive)" }} />,
-      };
-    default:
-      return {
-        text: "One concept per run",
-        icon: <ClockIcon className="size-4" style={{ color: "var(--atlas-accent)" }} />,
-      };
-  }
-}
-
 function GenerationResultScreen({ stateId }: MockupScreenProps) {
-  const hint = statusHint(stateId);
-
   return (
     <div
       className="flex min-h-full flex-1 flex-col"
@@ -567,21 +497,7 @@ function GenerationResultScreen({ stateId }: MockupScreenProps) {
     >
       <MockTopbar breadcrumb={["Hartley — Main Bathroom", "Atlas Image"]} />
 
-      <div className="atlas-frame flex flex-col gap-5 py-6">
-        <header className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="atlas-heading">
-              <span className="atlas-eyebrow">Atlas Image</span>
-              <h1>Generate & result</h1>
-            </div>
-            <span className="flex items-center gap-2 text-sm font-bold">
-              {hint.icon}
-              <span style={{ color: "var(--atlas-text-secondary)" }}>{hint.text}</span>
-            </span>
-          </div>
-          <StageStrip />
-        </header>
-
+      <div className="atlas-frame flex flex-1 flex-col gap-5 py-6">
         {stateId === "complete" ? <CompleteState /> : null}
         {stateId === "retryable" ? <RetryableState /> : null}
         {stateId === "blocked" ? <BlockedState /> : null}
@@ -589,6 +505,9 @@ function GenerationResultScreen({ stateId }: MockupScreenProps) {
           <GeneratingState />
         ) : null}
       </div>
+
+      {/* Terminal states get big half-and-half actions in a sticky nav */}
+      <ResultBottomNav stateId={stateId} />
     </div>
   );
 }

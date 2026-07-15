@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { CameraIcon, LibraryBigIcon, SparklesIcon } from "lucide-react";
 
 import {
   AddIconBox,
@@ -31,6 +32,8 @@ export type FilesBoardItem = {
   projectType: ProjectType;
   budgetRange: BudgetRange;
   createdAt: number;
+  imageCount: number;
+  conceptCount: number;
 };
 
 function dateValue(value: string) {
@@ -74,6 +77,10 @@ export function FilesBoard({ items }: { items: FilesBoardItem[] }) {
           value={query}
         />
         <DateFilter onChange={setFromDate} value={fromDate} />
+        <Link className="atlas-catalog-button" href="/references">
+          <LibraryBigIcon />
+          <span><strong>Reference catalog</strong><small>Browse references</small></span>
+        </Link>
       </div>
 
       <div className="atlas-files-grid">
@@ -125,6 +132,10 @@ export function FilesBoard({ items }: { items: FilesBoardItem[] }) {
                     {workflowStageLabels[file.workflowStage]}
                   </span>
                 </span>
+              </div>
+              <div className="mt-auto flex items-center gap-4 border-t pt-3" style={{ borderColor: "var(--atlas-border)" }}>
+                <span className="inline-flex items-center gap-1 text-xs font-bold"><CameraIcon className="size-3.5" />{file.imageCount}</span>
+                <span className="inline-flex items-center gap-1 text-xs font-bold" style={{ color: file.conceptCount ? "var(--atlas-accent)" : "var(--atlas-text-tertiary)" }}><SparklesIcon className="size-3.5" />{file.conceptCount ? `${file.conceptCount} concepts` : "No concepts"}</span>
               </div>
             </Link>
           );

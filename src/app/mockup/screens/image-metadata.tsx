@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  ArrowLeftIcon,
   ArrowUpRightIcon,
   CameraIcon,
   CheckIcon,
@@ -32,6 +33,11 @@ import {
 import { ClockDial, MockImage, MockTopbar, StatusPill, TagChip } from "../mock-ui";
 
 const CDN_ORIGIN = "https://cdn.aakb.dev/";
+
+/** Jump back to the file's Site images gallery (frame 7). */
+function openSiteImagesFrame() {
+  window.location.hash = "file-details/images";
+}
 
 const originLabels: Record<MockAssetOrigin, string> = {
   camera: "Captured on site camera",
@@ -416,26 +422,6 @@ function MetadataEditor({
           </button>
         </div>
       </div>
-
-      {/* Footer */}
-      <div className="mt-1 flex flex-col gap-3 border-t pt-4" style={{ borderColor: "var(--atlas-border)" }}>
-        <div className="flex items-center justify-end gap-3">
-          <button type="button" className="atlas-btn atlas-btn-outline h-10 px-4">
-            Cancel
-          </button>
-          <button type="button" className="atlas-btn atlas-btn-primary h-10 px-4">
-            <CheckIcon />
-            Save changes
-          </button>
-        </div>
-        <p
-          className="flex items-center justify-end gap-1.5 text-right text-xs font-bold"
-          style={{ color: "var(--atlas-text-tertiary)" }}
-        >
-          <TerminalIcon className="size-3.5" />
-          The AI agent can edit these same fields from the terminal.
-        </p>
-      </div>
     </div>
   );
 }
@@ -460,9 +446,25 @@ function ImageMetadataScreen({ stateId }: MockupScreenProps) {
       <MockTopbar breadcrumb={["Files", "Hartley — Main Bathroom", "Image details"]} />
 
       <main className="atlas-frame py-6">
-        <div className="atlas-heading mb-5">
-          <span className="atlas-eyebrow">Image metadata</span>
-          <h1>{asset.label}</h1>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+          <div className="atlas-heading">
+            <span className="atlas-eyebrow">Image metadata</span>
+            <h1>{asset.label}</h1>
+          </div>
+          <div
+            className="flex max-w-sm items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold"
+            style={{
+              borderColor: "var(--atlas-border)",
+              background: "var(--atlas-bg-muted)",
+              color: "var(--atlas-text-secondary)",
+            }}
+          >
+            <TerminalIcon
+              className="size-4 shrink-0"
+              style={{ color: "var(--atlas-accent)" }}
+            />
+            The AI agent can edit these same fields alongside you.
+          </div>
         </div>
 
         <div
@@ -565,6 +567,40 @@ function ImageMetadataScreen({ stateId }: MockupScreenProps) {
           </section>
         </div>
       </main>
+
+      {/* Sticky, full-width bottom nav — back + save split half and half */}
+      <div
+        className="sticky bottom-0 z-30 border-t"
+        style={{
+          borderColor: "var(--atlas-border)",
+          background: "color-mix(in srgb, var(--atlas-bg-surface) 92%, transparent)",
+          backdropFilter: "blur(14px)",
+        }}
+      >
+        <div
+          className="atlas-frame grid items-center gap-3 py-3"
+          style={{ gridTemplateColumns: "1fr 1fr" }}
+        >
+          <button
+            type="button"
+            onClick={openSiteImagesFrame}
+            className="atlas-btn atlas-btn-outline w-full"
+            style={{ height: 48, fontSize: 14 }}
+          >
+            <ArrowLeftIcon className="size-4" />
+            Back
+          </button>
+          <button
+            type="button"
+            onClick={openSiteImagesFrame}
+            className="atlas-btn atlas-btn-primary w-full"
+            style={{ height: 48, fontSize: 14 }}
+          >
+            <CheckIcon className="size-4" />
+            Save changes
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

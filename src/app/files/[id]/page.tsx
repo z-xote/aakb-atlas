@@ -11,7 +11,6 @@ import {
   workflowReadyLabel,
 } from "@/features/files/components/file-ui";
 import { addFileNoteAction } from "@/features/files/actions";
-import { FileImagesPanel } from "@/features/files/components/file-images-panel";
 import { getFileDetail } from "@/features/files/data";
 import { requireAuth } from "@/services/auth/session";
 import {
@@ -34,7 +33,7 @@ export default async function FileDetailPage({
     notFound();
   }
 
-  const { file, contact, notes, assets } = detail;
+  const { file, contact, notes } = detail;
   const title = splitFileTitle(file.title);
 
   return (
@@ -123,8 +122,6 @@ export default async function FileDetailPage({
             </div>
           </section>
         </div>
-
-        <FileImagesPanel assets={assets} fileId={id} />
 
         <section className="atlas-simple-panel mt-4">
           <div className="atlas-simple-panel-head">

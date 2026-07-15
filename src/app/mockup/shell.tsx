@@ -24,7 +24,8 @@ const surface: React.CSSProperties = {
 };
 
 function screenIndexFromHash(): number {
-  const slug = window.location.hash.replace(/^#/, "");
+  // A screen id may carry a sub-view after a slash, e.g. "file-details/images".
+  const slug = window.location.hash.replace(/^#/, "").split("/")[0];
   const index = screens.findIndex((screen) => screen.id === slug);
   return index >= 0 ? index : 0;
 }
@@ -50,6 +51,19 @@ export function MockupShell() {
   const [collapsed, setCollapsed] = useState(false);
 
   const index = useSyncExternalStore(subscribeToHash, screenIndexFromHash, () => 0);
+
+  // A direct deep-link (e.g. /mockup#phone-workspace) sets the hash before
+  // hydration; the static shell renders frame 1 on the server, so nudge the
+  // hash store after mount — and once more on the next frame in case hydration
+  // recovers from a mismatch — so the rendered frame and the control counter
+  // reliably match the URL instead of sticking on frame 1.
+  useEffect(() => {
+    const sync = () => window.dispatchEvent(new Event("hashchange"));
+    sync();
+    const raf = window.requestAnimationFrame(sync);
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
+
   const dark = useSyncExternalStore(
     subscribeToThemeClass,
     () => document.documentElement.classList.contains("dark"),
@@ -91,9 +105,11 @@ export function MockupShell() {
   };
 
   const Component = screen.Component;
+  // Keep `viewport` out of the key so flipping Phone ↔ Phone landscape re-renders
+  // the same instance (preserving in-screen state) instead of remounting it.
   const content = useMemo(
-    () => <Component key={`${screen.id}-${stateId}`} stateId={stateId} />,
-    [Component, screen.id, stateId]
+    () => <Component key={`${screen.id}-${stateId}`} stateId={stateId} viewport={viewport} />,
+    [Component, screen.id, stateId, viewport]
   );
 
   return (

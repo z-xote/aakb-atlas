@@ -11,6 +11,7 @@ let SQL: SqlJsStatic | null = null;
 let sqlite: Database | null = null;
 let db: SQLJsDatabase<typeof schema> | null = null;
 let ready = false;
+let loadedMtimeMs = 0;
 
 function databasePath() {
   const filename = path.basename(env.DATABASE_PATH || "atlas.sqlite");
@@ -38,6 +39,7 @@ async function getSqlite() {
 
     if (fs.existsSync(filePath)) {
       sqlite = new SQL.Database(fs.readFileSync(filePath));
+      loadedMtimeMs = fs.statSync(filePath).mtimeMs;
     } else {
       sqlite = new SQL.Database();
     }
@@ -56,6 +58,29 @@ export async function persistDatabase() {
   const filePath = databasePath();
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, Buffer.from(sqlite.export()));
+  loadedMtimeMs = fs.statSync(filePath).mtimeMs;
+}
+
+async function refreshDatabaseIfChanged() {
+  if (!sqlite) return;
+  const filePath = databasePath();
+  if (!fs.existsSync(filePath)) return;
+  const mtimeMs = fs.statSync(filePath).mtimeMs;
+  if (mtimeMs <= loadedMtimeMs) return;
+
+  const SQL = await getSqlJs();
+  sqlite.close();
+  sqlite = new SQL.Database(fs.readFileSync(filePath));
+  sqlite.run("PRAGMA foreign_keys = ON");
+  db = drizzle(sqlite, { schema });
+  loadedMtimeMs = mtimeMs;
+}
+
+function ensureColumn(connection: Database, table: string, column: string, definition: string) {
+  const columns = connection.exec(`PRAGMA table_info(${table})`)[0]?.values ?? [];
+  if (!columns.some((row) => row[1] === column)) {
+    connection.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }
 
 export async function ensureDatabase() {
@@ -102,10 +127,20 @@ export async function ensureDatabase() {
       id TEXT PRIMARY KEY,
       file_id TEXT NOT NULL,
       kind TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      origin TEXT NOT NULL DEFAULT 'upload',
       label TEXT NOT NULL,
       url TEXT NOT NULL DEFAULT '',
       storage_key TEXT NOT NULL DEFAULT '',
+      content_type TEXT NOT NULL DEFAULT '',
+      size_bytes INTEGER NOT NULL DEFAULT 0,
+      room TEXT,
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      camera_position_clock TEXT,
+      captured_at INTEGER,
+      error_message TEXT,
       created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
       FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
     );
 
@@ -119,7 +154,168 @@ export async function ensureDatabase() {
       finished_at INTEGER,
       FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS device_enrollments (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      client_instance_id TEXT NOT NULL,
+      device_name TEXT NOT NULL,
+      public_key TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      proof_payload TEXT NOT NULL,
+      proof_verified_at INTEGER,
+      status TEXT NOT NULL,
+      approved_device_id TEXT,
+      expires_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS device_enrollments_fingerprint_idx
+      ON device_enrollments(fingerprint);
+
+    CREATE TABLE IF NOT EXISTS devices (
+      id TEXT PRIMARY KEY,
+      device_name TEXT NOT NULL,
+      public_key TEXT NOT NULL,
+      fingerprint TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL,
+      pin_hash TEXT,
+      pin_salt TEXT,
+      pin_reset_required INTEGER NOT NULL DEFAULT 1,
+      failed_attempt_count INTEGER NOT NULL DEFAULT 0,
+      first_failed_at INTEGER,
+      locked_until INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_challenges (
+      id TEXT PRIMARY KEY,
+      device_id TEXT,
+      purpose TEXT NOT NULL,
+      canonical_payload TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      consumed_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS auth_challenges_device_idx
+      ON auth_challenges(device_id);
+
+    CREATE TABLE IF NOT EXISTS device_sessions (
+      id TEXT PRIMARY KEY,
+      token_hash TEXT NOT NULL UNIQUE,
+      device_id TEXT NOT NULL,
+      last_activity_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      revoked_at INTEGER,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS device_sessions_device_idx
+      ON device_sessions(device_id);
+
+    CREATE TABLE IF NOT EXISTS reference_categories (
+      id TEXT PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
+      label TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS reference_images (
+      id TEXT PRIMARY KEY,
+      category_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      storage_key TEXT NOT NULL,
+      public_url TEXT NOT NULL,
+      content_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (category_id) REFERENCES reference_categories(id) ON DELETE RESTRICT
+    );
+    CREATE INDEX IF NOT EXISTS reference_images_category_idx
+      ON reference_images(category_id);
+
+    CREATE TABLE IF NOT EXISTS atlas_image_sessions (
+      id TEXT PRIMARY KEY,
+      file_id TEXT NOT NULL,
+      source_asset_id TEXT NOT NULL,
+      parent_generation_id TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
+      FOREIGN KEY (source_asset_id) REFERENCES file_assets(id) ON DELETE RESTRICT
+    );
+    CREATE INDEX IF NOT EXISTS atlas_image_sessions_file_idx ON atlas_image_sessions(file_id);
+
+    CREATE TABLE IF NOT EXISTS atlas_image_directions (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      body TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      UNIQUE(session_id, position),
+      FOREIGN KEY (session_id) REFERENCES atlas_image_sessions(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS atlas_image_session_references (
+      session_id TEXT NOT NULL,
+      reference_id TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      UNIQUE(session_id, position),
+      UNIQUE(session_id, reference_id),
+      FOREIGN KEY (session_id) REFERENCES atlas_image_sessions(id) ON DELETE CASCADE,
+      FOREIGN KEY (reference_id) REFERENCES reference_images(id) ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS atlas_image_generations (
+      id TEXT PRIMARY KEY,
+      file_id TEXT NOT NULL,
+      session_id TEXT,
+      client_request_id TEXT NOT NULL,
+      attempt_of_generation_id TEXT,
+      parent_generation_id TEXT,
+      source_asset_id TEXT NOT NULL,
+      direction_snapshot_json TEXT NOT NULL,
+      compiled_prompt TEXT NOT NULL,
+      reference_snapshot_json TEXT NOT NULL,
+      provider_request_id TEXT,
+      model TEXT NOT NULL,
+      quality TEXT NOT NULL,
+      status TEXT NOT NULL,
+      error_code TEXT,
+      error_message TEXT,
+      output_asset_id TEXT,
+      created_at INTEGER NOT NULL,
+      started_at INTEGER NOT NULL,
+      completed_at INTEGER,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(file_id, client_request_id),
+      FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
+      FOREIGN KEY (session_id) REFERENCES atlas_image_sessions(id) ON DELETE SET NULL,
+      FOREIGN KEY (source_asset_id) REFERENCES file_assets(id) ON DELETE RESTRICT,
+      FOREIGN KEY (output_asset_id) REFERENCES file_assets(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS atlas_image_generations_file_idx
+      ON atlas_image_generations(file_id, created_at);
   `);
+
+  ensureColumn(connection, "file_assets", "status", "TEXT NOT NULL DEFAULT 'pending'");
+  ensureColumn(connection, "file_assets", "origin", "TEXT NOT NULL DEFAULT 'upload'");
+  ensureColumn(connection, "file_assets", "content_type", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(connection, "file_assets", "size_bytes", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(connection, "file_assets", "room", "TEXT");
+  ensureColumn(connection, "file_assets", "tags_json", "TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(connection, "file_assets", "camera_position_clock", "TEXT");
+  ensureColumn(connection, "file_assets", "captured_at", "INTEGER");
+  ensureColumn(connection, "file_assets", "error_message", "TEXT");
+  ensureColumn(connection, "file_assets", "updated_at", "INTEGER NOT NULL DEFAULT 0");
+  connection.run("UPDATE file_assets SET updated_at = created_at WHERE updated_at = 0");
+  connection.run("DELETE FROM file_assets WHERE id = 'asset_seed_sarah_before' AND url = ''");
 
   await seedDatabase(connection);
   ready = true;
@@ -183,21 +379,6 @@ async function seedDatabase(connection: Database) {
     );
 
     connection.run(
-      `INSERT INTO file_assets (
-        id, file_id, kind, label, url, storage_key, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        "asset_seed_sarah_before",
-        "file_seed_sarah",
-        "before_photo",
-        "Before photo slot",
-        "",
-        "files/file_seed_sarah/assets/before-photo.jpg",
-        now,
-      ]
-    );
-
-    connection.run(
       `INSERT INTO pipeline_runs (
         id, file_id, pipeline_key, status, summary, created_at, finished_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -222,6 +403,7 @@ async function seedDatabase(connection: Database) {
 
 export async function getDb() {
   await ensureDatabase();
+  await refreshDatabaseIfChanged();
 
   if (!db) {
     db = drizzle(await getSqlite(), { schema });

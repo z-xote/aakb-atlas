@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { getDb, persistDatabase } from "@/db/client";
 import {
@@ -15,7 +15,16 @@ import {
   type PipelineRunRow,
   type PrimaryContactRow,
 } from "@/db/schema";
-import type { FileFormInput, FileImageKind } from "@/types/atlas";
+import { parseAssetTags } from "@/features/files/schemas";
+import { ApiError } from "@/services/api/response";
+import { uploadStoredObject } from "@/services/bunny/client";
+import type {
+  ClockPosition,
+  FileAssetOrigin,
+  FileAssetStatus,
+  FileFormInput,
+  FileImageKind,
+} from "@/types/atlas";
 
 export type FileListItem = {
   file: FileRow;
@@ -27,6 +36,13 @@ export type FileDetail = FileListItem & {
   assets: FileAssetRow[];
   runs: PipelineRunRow[];
 };
+
+export type FileAssetDto = Omit<FileAssetRow, "tagsJson"> & { tags: string[] };
+
+export function toFileAssetDto(asset: FileAssetRow): FileAssetDto {
+  const { tagsJson, ...rest } = asset;
+  return { ...rest, tags: parseAssetTags(tagsJson) };
+}
 
 export async function listFiles(): Promise<FileListItem[]> {
   const db = await getDb();
@@ -126,29 +142,6 @@ export async function createFile(input: FileFormInput) {
         .run();
     }
 
-    tx.insert(fileAssets)
-      .values({
-        id: `asset_${randomUUID()}`,
-        fileId,
-        kind: "before_photo",
-        label: "Before photo slot",
-        url: "",
-        storageKey: `files/${fileId}/assets/before-photo.jpg`,
-        createdAt: now,
-      })
-      .run();
-
-    tx.insert(pipelineRuns)
-      .values({
-        id: `run_${randomUUID()}`,
-        fileId,
-        pipelineKey: "atlas_image",
-        status: "placeholder",
-        summary: "Atlas Image shell is staged. Real generation is deferred.",
-        createdAt: now,
-        finishedAt: null,
-      })
-      .run();
   });
 
   await persistDatabase();
@@ -261,7 +254,12 @@ export async function addFileAsset(
         label: input.label,
         url: input.url,
         storageKey: input.storageKey,
+        status: "ready",
+        origin: "upload",
+        contentType: "image/unknown",
+        sizeBytes: 0,
         createdAt: now,
+        updatedAt: now,
       })
       .run();
 
@@ -269,6 +267,182 @@ export async function addFileAsset(
   });
 
   await persistDatabase();
+}
+
+export async function getFileAsset(fileId: string, assetId: string) {
+  const db = await getDb();
+  return db
+    .select()
+    .from(fileAssets)
+    .where(and(eq(fileAssets.id, assetId), eq(fileAssets.fileId, fileId)))
+    .get() ?? null;
+}
+
+type AssetMetadataInput = {
+  label: string;
+  room: string | null;
+  tags: string[];
+  cameraPositionClock: ClockPosition | null;
+};
+
+async function reserveFileAsset(
+  fileId: string,
+  input: AssetMetadataInput & {
+    origin: FileAssetOrigin;
+    kind?: FileImageKind;
+    contentType: string;
+    sizeBytes: number;
+    retryAssetId?: string | null;
+  }
+) {
+  const db = await getDb();
+  const file = db.select({ id: files.id }).from(files).where(eq(files.id, fileId)).get();
+  if (!file) throw new ApiError(404, "file_not_found", "That file no longer exists.");
+
+  const now = Date.now();
+  const values = {
+    kind: input.kind ?? "site_visit",
+    status: "pending" as const,
+    origin: input.origin,
+    label: input.label,
+    url: "",
+    storageKey: "",
+    contentType: input.contentType,
+    sizeBytes: input.sizeBytes,
+    room: input.room,
+    tagsJson: JSON.stringify(input.tags),
+    cameraPositionClock: input.cameraPositionClock,
+    capturedAt: now,
+    errorMessage: null,
+    updatedAt: now,
+  };
+
+  if (input.retryAssetId) {
+    const existing = await getFileAsset(fileId, input.retryAssetId);
+    if (!existing) {
+      throw new ApiError(404, "asset_not_found", "That image does not belong to this file.");
+    }
+    if (existing.status === "ready") {
+      throw new ApiError(409, "asset_already_ready", "That image has already uploaded.");
+    }
+    db.update(fileAssets).set(values).where(eq(fileAssets.id, existing.id)).run();
+    await persistDatabase();
+    return { ...existing, ...values } satisfies FileAssetRow;
+  }
+
+  const asset = {
+    id: `asset_${randomUUID()}`,
+    fileId,
+    ...values,
+    createdAt: now,
+  } satisfies FileAssetRow;
+  db.insert(fileAssets).values(asset).run();
+  await persistDatabase();
+  return asset;
+}
+
+async function setFileAssetStatus(
+  fileId: string,
+  assetId: string,
+  input: {
+    status: FileAssetStatus;
+    url?: string;
+    storageKey?: string;
+    errorMessage?: string | null;
+  }
+) {
+  const db = await getDb();
+  db.update(fileAssets)
+    .set({ ...input, updatedAt: Date.now() })
+    .where(and(eq(fileAssets.id, assetId), eq(fileAssets.fileId, fileId)))
+    .run();
+  await persistDatabase();
+  const asset = await getFileAsset(fileId, assetId);
+  if (!asset) throw new ApiError(404, "asset_not_found", "That image does not belong to this file.");
+  return asset;
+}
+
+function fileExtension(filename: string, contentType: string) {
+  const fromName = filename.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  if (fromName && fromName.length <= 8) return fromName;
+  return ({
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/heic": "heic",
+    "image/heif": "heif",
+  } as Record<string, string>)[contentType] ?? "img";
+}
+
+export async function uploadFileAsset(
+  input: AssetMetadataInput & {
+    fileId: string;
+    origin: FileAssetOrigin;
+    kind?: FileImageKind;
+    filename: string;
+    contentType: string;
+    bytes: Uint8Array;
+    retryAssetId?: string | null;
+  },
+  storeObject = uploadStoredObject
+) {
+  const asset = await reserveFileAsset(input.fileId, {
+    ...input,
+    sizeBytes: input.bytes.byteLength,
+  });
+
+  try {
+    const stored = await storeObject({
+      objectPath: `files/${input.fileId}/assets/${asset.id}.${fileExtension(input.filename, input.contentType)}`,
+      bytes: input.bytes,
+      contentType: input.contentType,
+    });
+    const ready = await setFileAssetStatus(input.fileId, asset.id, {
+      status: "ready",
+      url: stored.publicUrl,
+      storageKey: stored.storageKey,
+      errorMessage: null,
+    });
+    return toFileAssetDto(ready);
+  } catch (error) {
+    const storageError = error instanceof ApiError ? error : null;
+    const notConfigured = storageError?.code === "bunny_not_configured";
+    await setFileAssetStatus(input.fileId, asset.id, {
+      status: "failed",
+      errorMessage: notConfigured
+        ? storageError.message
+        : "Upload failed. Check storage and try again.",
+    });
+    throw new ApiError(notConfigured ? 503 : 502, "asset_upload_failed", notConfigured
+      ? storageError.message
+      : "Bunny did not accept this image. You can retry it.", {
+      assetId: asset.id,
+      retryable: !notConfigured,
+      ...(storageError ? { causeCode: storageError.code, causeDetails: storageError.details } : {}),
+    });
+  }
+}
+
+export async function updateFileAssetMetadata(
+  fileId: string,
+  assetId: string,
+  input: AssetMetadataInput
+) {
+  const asset = await getFileAsset(fileId, assetId);
+  if (!asset) throw new ApiError(404, "asset_not_found", "That image does not belong to this file.");
+  const db = await getDb();
+  db.update(fileAssets)
+    .set({
+      label: input.label,
+      room: input.room,
+      tagsJson: JSON.stringify(input.tags),
+      cameraPositionClock: input.cameraPositionClock,
+      updatedAt: Date.now(),
+    })
+    .where(and(eq(fileAssets.id, assetId), eq(fileAssets.fileId, fileId)))
+    .run();
+  await persistDatabase();
+  return toFileAssetDto((await getFileAsset(fileId, assetId))!);
 }
 
 export async function deleteFile(id: string) {

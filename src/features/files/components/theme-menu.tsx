@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { MoonIcon, SunIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -12,22 +12,23 @@ function applyTheme(mode: ThemeMode) {
   window.localStorage.setItem("atlas-theme", mode);
 }
 
-export function ThemeMenu() {
-  const [mode, setMode] = useState<ThemeMode>(() => {
-    if (typeof window === "undefined") {
-      return "dark";
-    }
-
-    return window.localStorage.getItem("atlas-theme") === "light"
-      ? "light"
-      : "dark";
+function subscribeToTheme(callback: () => void) {
+  const observer = new MutationObserver(callback);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
   });
+  return () => observer.disconnect();
+}
+
+function getTheme(): ThemeMode {
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
+export function ThemeMenu() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    applyTheme(mode);
-  }, [mode]);
+  const mode = useSyncExternalStore(subscribeToTheme, getTheme, () => "dark");
 
   useEffect(() => {
     function closeOnOutside(event: PointerEvent) {
@@ -52,7 +53,7 @@ export function ThemeMenu() {
   }, []);
 
   function choose(nextMode: ThemeMode) {
-    setMode(nextMode);
+    applyTheme(nextMode);
     setOpen(false);
   }
 

@@ -5,13 +5,17 @@ const envSchema = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   DATABASE_PATH: z.string().min(1).default("data/atlas.sqlite"),
-  ATLAS_SHARED_PASSWORD: z.string().min(1).default("atlas-demo"),
-  ATLAS_AUTH_SECRET: z.string().min(8).default("dev-atlas-secret"),
-  ATLAS_AUTH_COOKIE_NAME: z.string().min(1).default("atlas_session"),
+  ATLAS_SESSION_COOKIE: z.string().min(1).default("atlas_device_session"),
+  ATLAS_CLI_ADMIN_TOKEN: z.string().optional(),
+  ATLAS_BASE_URL: z.url().default("http://localhost:3000"),
+  ATLAS_STORAGE_DRIVER: z.enum(["bunny", "local"]).default("local"),
+  ATLAS_STORAGE_PREFIX: z.string().default(""),
   BUNNY_STORAGE_ZONE: z.string().optional(),
   BUNNY_ACCESS_KEY: z.string().optional(),
+  BUNNY_STORAGE_ENDPOINT: z.url().default("https://storage.bunnycdn.com"),
   BUNNY_CDN_HOSTNAME: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
+  ATLAS_IMAGE_QUALITY: z.enum(["medium", "high"]).default("medium"),
 });
 
 export const env = envSchema.parse(process.env);

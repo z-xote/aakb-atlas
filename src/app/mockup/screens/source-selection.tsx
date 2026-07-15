@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  ArrowLeftIcon,
   ArrowRightIcon,
   CameraIcon,
   CheckIcon,
@@ -14,7 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { MockupScreen } from "../types";
 import { activeFile, mockAssets, type MockAsset } from "../mock-data";
-import { MockImage, MockTopbar } from "../mock-ui";
+import { MockBottomNav, MockImage, MockTopbar } from "../mock-ui";
 
 type SourceTab = "camera" | "library" | "upload";
 
@@ -30,59 +31,7 @@ const tabs: Array<{ id: SourceTab; label: string; hint: string; icon: typeof Cam
   { id: "upload", label: "Upload", hint: "Bring in a file", icon: UploadIcon },
 ];
 
-const stageSteps = [
-  { n: 1, label: "Source" },
-  { n: 2, label: "Direction & references" },
-  { n: 3, label: "Generate" },
-];
-
 const libraryAssets = mockAssets.filter((asset) => asset.fileId === activeFile.id);
-
-function StageStrip() {
-  const activeStep = 1;
-  return (
-    <div
-      className="border-b"
-      style={{
-        borderColor: "var(--atlas-border)",
-        background: "color-mix(in srgb, var(--atlas-bg-surface) 60%, transparent)",
-      }}
-    >
-      <div className="atlas-frame flex items-center gap-2 py-2.5">
-        {stageSteps.map((step, index) => {
-          const active = step.n === activeStep;
-          return (
-            <div className="flex items-center gap-2" key={step.n}>
-              <span
-                className="grid size-5 place-items-center rounded-full text-[11px] font-bold"
-                style={{
-                  background: active ? "var(--atlas-accent)" : "var(--atlas-bg-muted)",
-                  color: active ? "#ffffff" : "var(--atlas-text-tertiary)",
-                }}
-              >
-                {step.n}
-              </span>
-              <span
-                className="text-xs font-bold"
-                style={{
-                  color: active ? "var(--atlas-text-primary)" : "var(--atlas-text-tertiary)",
-                }}
-              >
-                {step.label}
-              </span>
-              {index < stageSteps.length - 1 ? (
-                <span
-                  className="mx-1 hidden h-px w-8 sm:block"
-                  style={{ background: "var(--atlas-border-strong)" }}
-                />
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function LibraryCard({
   asset,
@@ -152,9 +101,8 @@ function SourceSelectionScreen() {
       style={{ background: "var(--atlas-bg-root)", color: "var(--atlas-text-primary)" }}
     >
       <MockTopbar breadcrumb={["Hartley — Main Bathroom", "Atlas Image"]} />
-      <StageStrip />
 
-      <section className="atlas-frame flex-1 py-6 pb-28">
+      <section className="atlas-frame flex-1 py-6">
         <div className="atlas-heading mb-5">
           <div className="atlas-eyebrow">Atlas Image · Step 1</div>
           <h1>Choose the before image</h1>
@@ -334,54 +282,30 @@ function SourceSelectionScreen() {
         ) : null}
       </section>
 
-      {/* Persistent footer bar */}
-      <div
-        className="sticky bottom-0 z-10 border-t"
-        style={{
-          borderColor: "var(--atlas-border)",
-          background: "color-mix(in srgb, var(--atlas-bg-surface) 94%, transparent)",
-          backdropFilter: "blur(14px)",
-        }}
-      >
-        <div className="atlas-frame flex items-center justify-between gap-4 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            {selection ? (
-              <MockImage
-                seed={selection.seed}
-                ratio="1 / 1"
-                className="size-11 shrink-0 rounded-md"
-                style={{ borderRadius: "var(--atlas-radius)" }}
-              />
-            ) : (
-              <span
-                className="grid size-11 shrink-0 place-items-center rounded-md"
-                style={{
-                  background: "var(--atlas-bg-muted)",
-                  color: "var(--atlas-text-tertiary)",
-                  borderRadius: "var(--atlas-radius)",
-                }}
-              >
-                <ImageIcon className="size-5" />
-              </span>
-            )}
-            <div className="min-w-0">
-              <div className="atlas-label">Selected source</div>
-              <div className="truncate text-sm font-bold" style={{ color: "var(--atlas-text-primary)" }}>
-                {selection ? selection.label : "No source selected yet"}
-              </div>
-            </div>
-          </div>
-          <button
-            className="atlas-btn atlas-btn-primary h-11 px-5 text-base"
-            disabled={!selection}
-            style={selection ? undefined : { opacity: 0.5, cursor: "not-allowed" }}
-            type="button"
-          >
-            Continue to direction
-            <ArrowRightIcon aria-hidden="true" />
-          </button>
-        </div>
-      </div>
+      {/* Sticky, full-width bottom nav — Back on the left, forward on the right */}
+      <MockBottomNav>
+        <button
+          className="atlas-btn atlas-btn-outline w-full"
+          style={{ height: 48, fontSize: 14 }}
+          type="button"
+        >
+          <ArrowLeftIcon className="size-4" />
+          Back
+        </button>
+        <button
+          className="atlas-btn atlas-btn-primary w-full"
+          disabled={!selection}
+          style={{
+            height: 48,
+            fontSize: 14,
+            ...(selection ? {} : { opacity: 0.5, cursor: "not-allowed" }),
+          }}
+          type="button"
+        >
+          Continue to direction
+          <ArrowRightIcon aria-hidden="true" />
+        </button>
+      </MockBottomNav>
     </div>
   );
 }

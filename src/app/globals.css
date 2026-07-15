@@ -383,7 +383,7 @@
 
   .atlas-files-tools {
     @apply mb-5 grid w-full items-end gap-3;
-    grid-template-columns: minmax(0, 1.5fr) 210px;
+    grid-template-columns: minmax(0, 1.5fr) 210px auto;
   }
 
   .atlas-search-field,
@@ -422,6 +422,39 @@
   .atlas-date-filter-button small {
     @apply mt-0.5 text-[11px] font-bold;
     color: var(--atlas-text-tertiary);
+  }
+
+  .atlas-catalog-button {
+    @apply flex h-11 items-center gap-3 whitespace-nowrap border px-3.5 text-left transition-colors;
+    border-radius: var(--atlas-radius);
+    border-color: color-mix(in srgb, #7c3aed 45%, transparent);
+    background: color-mix(in srgb, #7c3aed 12%, var(--atlas-bg-surface));
+    color: #7c3aed;
+  }
+
+  .atlas-catalog-button:hover {
+    background: color-mix(in srgb, #7c3aed 20%, var(--atlas-bg-surface));
+    border-color: #7c3aed;
+  }
+
+  .atlas-catalog-button svg {
+    @apply size-4 shrink-0;
+    color: #7c3aed;
+  }
+
+  .atlas-catalog-button span,
+  .atlas-catalog-button strong,
+  .atlas-catalog-button small {
+    @apply block min-w-0;
+  }
+
+  .atlas-catalog-button strong {
+    @apply text-xs font-bold;
+  }
+
+  .atlas-catalog-button small {
+    @apply mt-0.5 text-[11px] font-bold;
+    color: color-mix(in srgb, #7c3aed 70%, var(--atlas-text-tertiary));
   }
 
   .atlas-date-filter-menu {
@@ -1105,6 +1138,51 @@
     color: var(--destructive);
   }
 
+  /* Hide the native scrollbar on drag-to-scroll / swipe rows. */
+  .atlas-no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .atlas-no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .atlas-transcription-progress-bar {
+    animation: atlas-transcription-progress 1.2s ease-in-out infinite;
+  }
+
+  .atlas-generation-progress-bar {
+    animation: atlas-generation-progress 1.5s ease-in-out infinite;
+  }
+
+  @keyframes atlas-transcription-progress {
+    from {
+      transform: translateX(-110%);
+    }
+
+    to {
+      transform: translateX(260%);
+    }
+  }
+
+  @keyframes atlas-generation-progress {
+    from {
+      transform: translateX(-110%);
+    }
+
+    to {
+      transform: translateX(320%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .atlas-transcription-progress-bar,
+    .atlas-generation-progress-bar {
+      animation: none;
+    }
+  }
+
   @media (max-width: 1100px) {
     .atlas-files-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1128,7 +1206,7 @@
     }
 
     .atlas-files-tools {
-      grid-template-columns: minmax(0, 1fr) 200px;
+      grid-template-columns: minmax(0, 1fr) 200px auto;
     }
 
     .atlas-file-sections,
