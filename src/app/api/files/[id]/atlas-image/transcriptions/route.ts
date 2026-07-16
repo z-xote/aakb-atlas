@@ -1,4 +1,5 @@
 import { MAX_TRANSCRIPTION_BYTES } from "@/features/atlas-image/schemas";
+import { audioRecordingFilename, detectAudioFormat } from "@/features/atlas-image/audio";
 import { ApiError, apiSuccess, withApiErrors } from "@/services/api/response";
 import { getAuthenticatedSession } from "@/services/auth/session";
 import { AtlasProviderError, openAIAtlasProvider } from "@/services/openai/client";
@@ -14,11 +15,16 @@ export async function POST(request: Request) {
     if (audio.size > MAX_TRANSCRIPTION_BYTES) {
       throw new ApiError(413, "audio_too_large", "Voice directions must be 12 MB or smaller.");
     }
+    const bytes = new Uint8Array(await audio.arrayBuffer());
+    const format = detectAudioFormat(bytes, audio.type);
+    if (!format) {
+      throw new ApiError(415, "audio_format_unsupported", "This recording format is not supported. Update Safari and try again.");
+    }
     try {
       const text = await openAIAtlasProvider.transcribe({
-        bytes: new Uint8Array(await audio.arrayBuffer()),
-        contentType: audio.type || "audio/webm",
-        filename: audio.name || "direction.webm",
+        bytes,
+        contentType: format.contentType,
+        filename: audioRecordingFilename(format),
       });
       return apiSuccess({ text });
     } catch (error) {

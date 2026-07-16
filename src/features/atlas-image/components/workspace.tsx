@@ -11,8 +11,15 @@ import { AtlasBottomActions } from "@/features/files/components/file-ui";
 import type { FileAssetDto } from "@/features/files/data";
 import type { ReferenceDto } from "@/features/references/data";
 import type { AtlasImageQuality } from "@/types/atlas";
+import { audioFormatFromContentType, audioRecordingFilename, selectAudioRecorderMimeType } from "@/features/atlas-image/audio";
 import { transcriptionToComposerDraft } from "@/features/atlas-image/schemas";
 import { AtlasImageGenerationProgress } from "@/features/atlas-image/components/generation-progress";
+
+type TranscriptionResponse = {
+  ok: boolean;
+  data?: { text?: string };
+  error?: { message?: string };
+};
 
 function TranscriptionProgress() {
   return (
@@ -74,6 +81,7 @@ export function AtlasImageWorkspace({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const audioInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const categories = Array.from(new Map(availableReferences.map((reference) => [reference.categorySlug, reference.categoryLabel])).entries());
   const visibleReferences = availableReferences.filter((reference) => reference.categorySlug === category);
@@ -127,13 +135,21 @@ export function AtlasImageWorkspace({
 
   async function startRecording() {
     setError("");
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") { setError("Voice recording is not available in this browser."); return; }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      audioInputRef.current?.click();
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const mimeType = selectAudioRecorderMimeType(
+        typeof MediaRecorder.isTypeSupported === "function"
+          ? (contentType) => MediaRecorder.isTypeSupported(contentType)
+          : undefined
+      );
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 128_000 } : undefined);
       chunksRef.current = [];
       recorder.ondataavailable = (event) => { if (event.data.size) chunksRef.current.push(event.data); };
-      recorder.onstop = () => void transcribeRecording(recorder.mimeType || "audio/webm");
+      recorder.onstop = () => void transcribeRecording(chunksRef.current[0]?.type || recorder.mimeType || "audio/webm");
       streamRef.current = stream;
       recorderRef.current = recorder;
       recorder.start();
@@ -152,14 +168,31 @@ export function AtlasImageWorkspace({
   }
 
   async function transcribeRecording(contentType: string) {
+    const format = audioFormatFromContentType(contentType);
+    if (!format) {
+      setError("This browser recorded an unsupported audio format. Update Safari and try again.");
+      setBusy("");
+      return;
+    }
+    const blob = new Blob(chunksRef.current, { type: format.contentType });
+    await transcribeAudioFile(new File([blob], audioRecordingFilename(format), { type: format.contentType }));
+  }
+
+  async function transcribeAudioFile(file: File) {
+    if (busy && busy !== "transcribing") return;
     setBusy("transcribing");
     setError("");
     try {
-      const blob = new Blob(chunksRef.current, { type: contentType });
       const form = new FormData();
-      form.set("audio", new File([blob], "direction.webm", { type: contentType }));
+      form.set("audio", file);
       const response = await fetch(`/api/files/${fileId}/atlas-image/transcriptions`, { method: "POST", body: form });
-      const body = (await response.json()) as { ok: boolean; data?: { text?: string }; error?: { message?: string } };
+      const responseText = await response.text();
+      let body: TranscriptionResponse | null = null;
+      try { body = JSON.parse(responseText) as TranscriptionResponse; } catch { /* A proxy may replace an upstream error with a non-JSON response. */ }
+      if (!body) {
+        setError(response.ok ? "Atlas received an invalid transcription response." : `Atlas could not transcribe that recording (HTTP ${response.status}).`);
+        return;
+      }
       if (!response.ok || !body.ok || !body.data?.text) setError(body.error?.message ?? "Atlas could not transcribe that recording.");
       else setDraft(transcriptionToComposerDraft(body.data.text));
     } catch {
@@ -213,6 +246,7 @@ export function AtlasImageWorkspace({
             <div className="border-t p-3" style={{ borderColor: "var(--atlas-border)" }}>
               {recording ? <div className="flex items-center gap-3 rounded-lg border p-3" style={{ borderColor: "var(--destructive)", background: "var(--atlas-bg-muted)" }}><span className="size-2.5 animate-pulse rounded-full" style={{ background: "var(--destructive)" }} /><strong className="flex-1 text-sm">Recording direction…</strong><button className="atlas-btn text-white" onClick={stopRecording} style={{ background: "var(--destructive)" }} type="button"><SquareIcon className="size-3" fill="currentColor" />Stop</button></div> : busy === "transcribing" ? <TranscriptionProgress /> : (
                 <div className="flex items-end gap-2 rounded-lg border p-2" style={{ borderColor: "var(--atlas-border-strong)", background: "var(--atlas-bg-muted)" }}>
+                  <input accept="audio/*,.m4a,.mp4,.mp3,.wav,.webm,.ogg,.flac" capture="user" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void transcribeAudioFile(file); }} ref={audioInputRef} type="file" />
                   <input accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadReference(file); }} ref={uploadInputRef} type="file" />
                   <button aria-label="Add image reference" className="atlas-icon-button atlas-icon-button-bordered size-10! shrink-0" disabled={Boolean(busy)} onClick={() => uploadInputRef.current?.click()} title="Choose an optional image reference" type="button">{busy === "uploading-reference" ? <LoaderCircleIcon className="animate-spin" /> : <PlusIcon />}</button>
                   <textarea className="max-h-28 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none" onChange={(event) => setDraft(event.target.value)} placeholder="Describe the change, or tap the mic…" value={draft} />
