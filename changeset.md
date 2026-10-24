@@ -1,36 +1,49 @@
-[FIX]: Support iPad voice transcription formats
-# v0.2.0 | Focus: Atlas voice recording compatibility
+[DOCS]: Adopt the git bible so every change lands through a PR
+# v0.2.1 | Focus: Repository
 
 -------------------------------- ✦ DETAILS ✦ --------------------------------
 
 ## TASKS
 -----------------------------------------------------------------------------
-1. Preserve the audio container selected by each browser.
+1. Add maintain.md with section 3 of the git bible and Atlas additions.
 
-2. Detect uploaded audio containers before provider submission.
+2. Rewrite AGENTS.md with a read-first list and the repository rules.
 
-3. Add older iPad capture fallback and format regression tests.
+3. Add docs/git-workflow.md for the master trunk, branch roots,
+   worktrees and the merge.
+
+4. Add a typecheck script so the gate is bun run typecheck, lint, test.
 
 
 
 ## DESCRIPTION
 -----------------------------------------------------------------------------
-Fix voice transcription on iPad by sending MP4 and AAC recordings with
-matching MIME types and filenames. Keep WebM and other supported browser
-formats working, and fall back to native audio capture on older iPads.
+Atlas had no written rules for branches, commits or pull requests, so
+agents committed straight to master. It now follows the git bible. Each
+change gets a <root>/<change> branch and a PR built from changeset.md,
+then a squash merge and a tag on master.
+
+The trunk stays master. Renaming it to main would break the remote and
+open clones, so the docs tell agents to read master wherever the bible
+or a skill says main.
 
 
 
 
 ## TECHNICAL NOTES
 -----------------------------------------------------------------------------
-- Added shared format negotiation and byte detection in audio.ts.
+- maintain.md copies bible section 3 verbatim, then ATLAS ADDITIONS:
+  the Focus rule, the master trunk, and changeset.md as the version.
 
-- Updated the workspace recorder to prefer AAC in MP4 on Safari.
+- AGENTS.md keeps the create-next-app Next.js rules block unchanged.
 
-- The transcription route now distrusts client file extensions.
+- Branch roots follow src/features: references, files, atlas-image,
+  pipelines, auth. Type roots docs, fix and chore cover the rest.
 
-- Added tests for MP4, WebM, Ogg, WAV, FLAC, and MP3 detection.
+- package.json: added "typecheck": "tsc --noEmit".
+
+- UNVERIFIED: the gate did not run. The checkout has no node_modules,
+  so tsc reports 3747 missing-module errors and eslint is not found.
 
 
 -----------------------------------------------------------------------------
