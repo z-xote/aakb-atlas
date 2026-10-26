@@ -163,7 +163,7 @@ export function FileWizard({ action }: { action: (formData: FormData) => Promise
   const [budgetRange, setBudgetRange] = useState<BudgetRange>("unknown");
   const [leadSource, setLeadSource] = useState("");
   const [relationshipStatus, setRelationshipStatus] =
-    useState<RelationshipStatus>("prospect");
+    useState<RelationshipStatus>("new_lead");
   const [workflowStage, setWorkflowStage] = useState<WorkflowStage>("new_file");
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");

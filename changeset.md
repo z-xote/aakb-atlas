@@ -1,5 +1,5 @@
 [FEATURE]: Manage references and categories in the catalog and the CLI
-# v0.6.0 | Focus: Reference catalog
+# v0.7.0 | Focus: Reference catalog
 
 -------------------------------- ✦ DETAILS ✦ --------------------------------
 

@@ -114,19 +114,19 @@ export function relationshipShortLabel(value: RelationshipStatus) {
 }
 
 export function workflowReadyLabel(value: WorkflowStage) {
-  if (value === "image_concept") {
-    return "Image concept ready";
+  if (value === "design_concept") {
+    return "Design concept ready";
   }
 
-  if (value === "before_photo") {
-    return "Before photo needed";
+  if (value === "site_visit") {
+    return "Site visit needed";
   }
 
   if (value === "accepted") {
     return "Accepted";
   }
 
-  if (value === "proposal_needed") {
+  if (value === "proposal") {
     return "Proposal needed";
   }
 
