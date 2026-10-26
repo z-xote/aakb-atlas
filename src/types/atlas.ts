@@ -9,9 +9,9 @@ export const relationshipStatuses = [
 
 export const workflowStages = [
   "new_file",
-  "before_photo",
-  "image_concept",
-  "proposal_needed",
+  "site_visit",
+  "design_concept",
+  "proposal",
   "accepted",
   "archived",
 ] as const;
@@ -98,9 +98,9 @@ export const relationshipStatusLabels: Record<RelationshipStatus, string> = {
 
 export const workflowStageLabels: Record<WorkflowStage, string> = {
   new_file: "New file",
-  before_photo: "Before photo",
-  image_concept: "Image concept",
-  proposal_needed: "Proposal needed",
+  site_visit: "Site Visit",
+  design_concept: "Design Concept",
+  proposal: "Proposal",
   accepted: "Accepted",
   archived: "Archived",
 };

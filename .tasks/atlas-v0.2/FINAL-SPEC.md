@@ -79,7 +79,7 @@ The new-file form is a four-step wizard:
 
 1. **Basics:** file name and project type.
 2. **Scope:** job type, budget range, and lead source.
-3. **Pipeline:** relationship status and workflow stage.
+3. **Pipeline:** relationship status (Prospect, New lead, Qualified lead, Client, Bounced, Archived) and workflow stage (New file, Site Visit, Design Concept, Proposal, Accepted, Archived).
 4. **Contact:** contact name, email, phone, and note.
 
 Required fields are file name, project type, and contact name. All current detailed fields remain available; the wizard changes presentation, not the underlying file record.
