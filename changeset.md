@@ -1,5 +1,5 @@
 [FEATURE]: Sign in to Atlas with Google through Clerk, allowlisted emails only
-# v0.6.0 | Focus: Sign-in
+# v0.7.0 | Focus: Sign-in
 
 -------------------------------- ✦ DETAILS ✦ --------------------------------
 

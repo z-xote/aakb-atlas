@@ -25,7 +25,7 @@ const {
 const fileInput = {
   title: "Milestone 2 bathroom",
   relationshipStatus: "qualified_lead" as const,
-  workflowStage: "before_photo" as const,
+  workflowStage: "site_visit" as const,
   projectType: "bathroom" as const,
   budgetRange: "20k_35k" as const,
   jobType: "renovation" as const,
