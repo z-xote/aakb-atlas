@@ -2,7 +2,7 @@ import type { getAuthenticatedSession } from "@/services/auth/session";
 
 type AtlasSession = NonNullable<Awaited<ReturnType<typeof getAuthenticatedSession>>>;
 
-// Stored in reference_images.created_by. The `next dev` bypass has no device.
+// Stored in reference_images.created_by. The dev login bypass reports device "dev-local".
 export function sessionActor(session: AtlasSession) {
-  return "device" in session ? `device:${session.device.id}` : "dev";
+  return `device:${session.device.id}`;
 }

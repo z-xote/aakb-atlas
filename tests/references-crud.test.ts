@@ -21,6 +21,7 @@ const { eq } = await import("drizzle-orm");
 const sessionRoute = await import("@/app/api/references/route");
 const sessionItemRoute = await import("@/app/api/references/[id]/route");
 const adminItemRoute = await import("@/app/api/admin/references/[id]/route");
+const categoriesRoute = await import("@/app/api/references/categories/route");
 
 const fakeStore = async ({ objectPath }: { objectPath: string }) => ({ storageKey: objectPath, publicUrl: `https://refs.example/${objectPath}` });
 
@@ -104,7 +105,66 @@ describe("deleteReferenceImage", () => {
   });
 });
 
+describe("addReferenceCategory", () => {
+  test("derives the slug from the label and appends after the last category", async () => {
+    const before = (await references.listReferenceCatalog()).categories;
+    const created = await references.addReferenceCategory("Shower Screens & Glass");
+    expect(created.slug).toBe("shower-screens-glass");
+    expect(created.sortOrder).toBe(Math.max(...before.map((item) => item.sortOrder)) + 1);
+    const error = await references.addReferenceCategory("shower screens glass").catch((caught: unknown) => caught);
+    expect((error as InstanceType<typeof ApiError>).code).toBe("category_exists");
+  });
+});
+
+describe("updateReferenceImage", () => {
+  test("changes label, category and tags without touching storage", async () => {
+    const image = await addReference("Metadata only");
+    await references.ensureReferenceCategory({ slug: "crud-baths", label: "CRUD baths", sortOrder: 5 });
+    const removed: string[] = [];
+    const result = await references.updateReferenceImage(image.id, { label: "Renamed", category: "crud-baths", tags: ["walnut"], image: null }, fakeStore, async (key) => { removed.push(key); });
+    expect(result.categorySlug).toBe("crud-baths");
+    expect(removed).toEqual([]);
+    const row = await referenceRow(image.id);
+    expect(row?.label).toBe("Renamed");
+    expect(row?.tagsJson).toBe(JSON.stringify(["walnut"]));
+    expect(row?.storageKey).toBe(image.storageKey);
+  });
+
+  test("stores a replacement image under a new key and removes the old object", async () => {
+    const image = await addReference("Replace me");
+    const removed: string[] = [];
+    await references.updateReferenceImage(image.id, {
+      label: "Replaced",
+      category: "crud-vanities",
+      tags: [],
+      image: { filename: "new.png", contentType: "image/png", bytes: new Uint8Array([4, 5, 6, 7]) },
+    }, fakeStore, async (key) => { removed.push(key); });
+    const row = await referenceRow(image.id);
+    expect(row?.storageKey).not.toBe(image.storageKey);
+    expect(row?.storageKey.endsWith(".png")).toBe(true);
+    expect(row?.contentType).toBe("image/png");
+    expect(row?.sizeBytes).toBe(4);
+    expect(removed).toEqual([image.storageKey]);
+  });
+});
+
 describe("reference routes reject unauthenticated callers", () => {
+  test("session category route returns 401 without a session", async () => {
+    const response = await categoriesRoute.POST(new Request("http://atlas.test/api/references/categories", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ label: "Signed out" }) }));
+    expect(response.status).toBe(401);
+  });
+
+  test("session edit route returns 401 and keeps the reference", async () => {
+    const image = await addReference("Signed-out edit");
+    const form = new FormData();
+    form.set("category", "crud-vanities");
+    form.set("label", "Changed");
+    const response = await sessionItemRoute.PATCH(new Request(`http://atlas.test/api/references/${image.id}`, { method: "PATCH", body: form }), { params: Promise.resolve({ id: image.id }) });
+    expect(response.status).toBe(401);
+    expect((await referenceRow(image.id))?.label).toBe("Signed-out edit");
+  });
+
+
   test("session upload route returns 401 without a session", async () => {
     const form = new FormData();
     form.set("category", "crud-vanities");

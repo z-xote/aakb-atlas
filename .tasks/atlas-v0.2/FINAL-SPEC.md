@@ -130,14 +130,16 @@ References are optional but recommended. The selected source and references rema
 
 ### 5.6 Reference Catalog
 
-- The UI browses, searches and filters references. Any signed-in user can also add and delete references there (VAR-29, which supersedes the earlier browse-only rule).
-- **Add reference** opens a form with image file, label, category and tags. Only existing categories are offered. It uses the same upload service, content-type check (`image/*`) and 12 MB limit as the CLI-admin upload, and records the session's device as `created_by`.
+- The UI browses, searches and filters references. Any signed-in user can also add, edit and delete references and add categories there (VAR-29, which supersedes the earlier browse-only rule).
+- **Add reference** opens a form with an image drop zone that previews the image, a label, category chips and tag chips. It uses the same upload service, content-type check (`image/*`) and 12 MB limit as the CLI-admin upload, and records the session's device as `created_by`.
+- **New category** in the category chips takes a name only. Atlas derives the slug from the name and appends the category after the last one.
+- Each card has an edit action. It opens the same form, filled in, and can change the label, category, tags and image. A replacement image gets a new storage key; the old object is removed after the row points at the new one.
 - Each card has a delete action. A confirm dialog names the reference. Delete is a hard delete: the `reference_images` row and the stored object at `storage_key` are both removed.
 - A reference still pinned to an Atlas image session cannot be deleted. The dialog says how many sessions use it. Generations keep their own reference snapshot, so they never block a delete.
 - After an add or delete the catalog refreshes in place, without a full page reload.
 - The first seeded taxonomy is bathroom-oriented but extensible: Vanities, Baths, Sinks, Toilets, Showers, Racks, Tapware, Materials, Flooring, Lighting, Mirrors, and Benchtops.
 - Categories are data, not a hard-coded union, so agents can add more later.
-- Category creation stays CLI/API only in this release.
+- Categories cannot be renamed or deleted in the UI in this release.
 
 ## 6. Screen contract
 
@@ -158,7 +160,7 @@ References are optional but recommended. The selected source and references rema
 | 13 | Phone workspace | Minimal sequential references/direction fallback; not a full release-parity target. |
 | 14 | Generation result | Generating, complete, retryable, and blocked outcomes with state-appropriate actions. |
 | 15 | Generation detail | Before/after, expandable details, references, lineage, provider metadata, continue/regenerate. |
-| 16 | Reference Catalog | Browse, category filters, tags/search, empty results, add reference, and confirmed delete. |
+| 16 | Reference Catalog | Browse, category filters, tags/search, empty results, add and edit reference, add category, and confirmed delete. |
 
 ## 7. Image metadata contract
 
@@ -258,6 +260,8 @@ Exact internal filenames may vary, but the behavior below is required. All mutat
 - CLI-admin create category;
 - CLI-admin upload reference image with category, label, and tags;
 - session-authenticated `POST /api/references` uploads a reference with the same validation as the CLI-admin upload;
+- session-authenticated `PATCH /api/references/:id` changes label, category, tags and optionally the image, with the same validation;
+- session-authenticated `POST /api/references/categories` creates a category from a label;
 - session-authenticated `DELETE /api/references/:id` and CLI-admin `DELETE /api/admin/references/:id` hard-delete a reference and its stored object, and return `409 reference_in_use` while an Atlas image session still uses it.
 
 ### Atlas Image
@@ -410,7 +414,7 @@ Implement generation history, source selection, append-only direction entries, v
 7. Camera position accepts only nullable `12|2|3|4|6|8|9|10` and is editable later.
 8. Original, uploaded, reference, and generated image bytes are canonical in Bunny in production.
 9. File Images support the mockup's search, kind filters, room filters, metadata detail, and Atlas Image action.
-10. The web Reference Catalog lets a signed-in user browse, add and delete references; the CLI can also create categories, upload and delete references.
+10. The web Reference Catalog lets a signed-in user browse, add, edit and delete references and add categories; the CLI can also create categories, upload and delete references.
 11. An authenticated user can select one source, select several references, append user-only direction entries, transcribe voice into an editable draft, explicitly add that draft, and request one GPT Image 2 concept with no assistant text replies.
 12. Every completed output is immediately stored, appears in File Images/history, and retains source, compiled direction, references, provider request ID, model, quality, and lineage.
 13. Continue editing uses the chosen output as the next source without destroying the prior generation.
@@ -426,7 +430,7 @@ Implement generation history, source selection, append-only direction entries, v
 
 - Phone-first or portrait pixel parity.
 - Multi-company tenancy or named staff accounts.
-- A web admin UI for reference category creation or device approval.
+- A web admin UI for device approval.
 - Direct browser uploads to Bunny.
 - Direct CLI access to the `sql.js` file.
 - Multiple generated concepts by default or automatic fusion of several source photos.

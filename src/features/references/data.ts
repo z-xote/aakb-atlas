@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { asc, count, eq } from "drizzle-orm";
+import { asc, count, eq, max } from "drizzle-orm";
 
 import { getDb, persistDatabase } from "@/db/client";
 import { atlasImageSessionReferences, referenceCategories, referenceImages } from "@/db/schema";
+import { categorySlug, type ReferenceImageInput } from "@/features/references/schemas";
 import { ApiError } from "@/services/api/response";
 import { deleteStoredObject, uploadStoredObject, type StoredObject } from "@/services/bunny/client";
 
@@ -74,30 +75,51 @@ export async function ensureReferenceCategory(input: { slug: string; label: stri
   return createReferenceCategory(input);
 }
 
+async function findCategory(slug: string) {
+  const db = await getDb();
+  const category = db.select().from(referenceCategories).where(eq(referenceCategories.slug, slug)).get();
+  if (!category) throw new ApiError(404, "category_not_found", "No reference category matches that slug.");
+  return category;
+}
+
+function storeReferenceObject(categoryId: string, objectName: string, image: ReferenceImageInput, storeObject: ReferenceObjectWriter) {
+  const extension = image.filename.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() || "bin";
+  return storeObject({
+    objectPath: `references/${categoryId}/${objectName}.${extension}`,
+    bytes: image.bytes,
+    contentType: image.contentType,
+  });
+}
+
+async function removeOrLog(referenceId: string, storageKey: string, removeObject: ReferenceObjectRemover) {
+  try {
+    await removeObject(storageKey);
+    return true;
+  } catch (error) {
+    console.error("Reference object removal failed after metadata change", { referenceId, storageKey, error });
+    return false;
+  }
+}
+
+// Slug and position come from the label so the UI only asks for a name.
+export async function addReferenceCategory(label: string) {
+  const slug = categorySlug(label);
+  if (!slug) throw new ApiError(400, "invalid_category", "Use letters or numbers in the category name.");
+  const db = await getDb();
+  const [{ last }] = db.select({ last: max(referenceCategories.sortOrder) }).from(referenceCategories).all();
+  return createReferenceCategory({ slug, label, sortOrder: (last ?? -1) + 1 });
+}
+
 export async function uploadReferenceImage(input: {
   category: string;
   label: string;
   tags: string[];
-  filename: string;
-  contentType: string;
-  bytes: Uint8Array;
   createdBy: string;
-}, storeObject: ReferenceObjectWriter = uploadStoredObject) {
+} & ReferenceImageInput, storeObject: ReferenceObjectWriter = uploadStoredObject) {
   const db = await getDb();
-  const category = db
-    .select()
-    .from(referenceCategories)
-    .where(eq(referenceCategories.slug, input.category))
-    .get();
-  if (!category) throw new ApiError(404, "category_not_found", "No reference category matches that slug.");
-
+  const category = await findCategory(input.category);
   const id = `reference_${randomUUID()}`;
-  const extension = input.filename.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() || "bin";
-  const stored = await storeObject({
-    objectPath: `references/${category.id}/${id}.${extension}`,
-    bytes: input.bytes,
-    contentType: input.contentType,
-  });
+  const stored = await storeReferenceObject(category.id, id, input, storeObject);
   const now = Date.now();
   const row = {
     id,
@@ -126,6 +148,36 @@ export async function uploadReferenceImage(input: {
   return { ...row, categorySlug: category.slug, categoryLabel: category.label, tags: input.tags, url: row.publicUrl };
 }
 
+// A new image gets a new object key, so the old object is removed only after the row points away from it.
+export async function updateReferenceImage(id: string, input: {
+  category: string;
+  label: string;
+  tags: string[];
+  image: ReferenceImageInput | null;
+}, storeObject: ReferenceObjectWriter = uploadStoredObject, removeObject: ReferenceObjectRemover = deleteStoredObject) {
+  const db = await getDb();
+  const current = db.select().from(referenceImages).where(eq(referenceImages.id, id)).get();
+  if (!current) throw new ApiError(404, "reference_not_found", "No reference matches that ID.");
+  const category = await findCategory(input.category);
+  const stored = input.image ? await storeReferenceObject(category.id, `${id}-${Date.now()}`, input.image, storeObject) : null;
+  const changes = {
+    categoryId: category.id,
+    label: input.label,
+    tagsJson: JSON.stringify(input.tags),
+    updatedAt: Date.now(),
+    ...(stored && input.image ? {
+      storageKey: stored.storageKey,
+      publicUrl: stored.publicUrl,
+      contentType: input.image.contentType,
+      sizeBytes: input.image.bytes.byteLength,
+    } : {}),
+  };
+  db.update(referenceImages).set(changes).where(eq(referenceImages.id, id)).run();
+  await persistDatabase();
+  const storageRemoved = stored ? await removeOrLog(id, current.storageKey, removeObject) : true;
+  return { id, label: input.label, categorySlug: category.slug, tags: input.tags, url: changes.publicUrl ?? current.publicUrl, storageRemoved };
+}
+
 export async function deleteReferenceImage(id: string, removeObject: ReferenceObjectRemover = deleteStoredObject) {
   const db = await getDb();
   const image = db.select().from(referenceImages).where(eq(referenceImages.id, id)).get();
@@ -148,12 +200,5 @@ export async function deleteReferenceImage(id: string, removeObject: ReferenceOb
   db.delete(referenceImages).where(eq(referenceImages.id, id)).run();
   await persistDatabase();
   // The row is gone first so a storage failure leaves an orphaned object, never a broken card.
-  let storageRemoved = true;
-  try {
-    await removeObject(image.storageKey);
-  } catch (error) {
-    storageRemoved = false;
-    console.error("Reference object removal failed after metadata delete", { referenceId: id, storageKey: image.storageKey, error });
-  }
-  return { id, label: image.label, storageRemoved };
+  return { id, label: image.label, storageRemoved: await removeOrLog(id, image.storageKey, removeObject) };
 }
