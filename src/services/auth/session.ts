@@ -3,7 +3,11 @@ import { redirect } from "next/navigation";
 
 import { findActiveSession, revokeSessionToken, touchSession } from "@/services/auth/device";
 import { getAuthEnv } from "@/services/auth/env";
-import { isProduction } from "@/services/env";
+import { env, isProduction } from "@/services/env";
+
+// `next dev` skips device login so local work needs no enrolment.
+const DEV_SESSION = { dev: true } as const;
+const devLoginBypass = () => env.NODE_ENV === "development";
 
 export async function getSessionToken() {
   const cookieStore = await cookies();
@@ -12,7 +16,8 @@ export async function getSessionToken() {
 
 export async function getAuthenticatedSession() {
   const token = await getSessionToken();
-  return token ? findActiveSession(token) : null;
+  const session = token ? await findActiveSession(token) : null;
+  return session ?? (devLoginBypass() ? DEV_SESSION : null);
 }
 
 export async function isAuthenticated() {
@@ -44,5 +49,6 @@ export async function clearAuthSession() {
 
 export async function touchCurrentSession() {
   const token = await getSessionToken();
-  return token ? touchSession(token) : null;
+  const session = token ? await touchSession(token) : null;
+  return session ?? (devLoginBypass() ? DEV_SESSION : null);
 }
