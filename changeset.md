@@ -22,7 +22,10 @@
 6. Add a test that maps the old values to the new ones and runs the
    migration twice.
 
-7. List the relationship statuses and workflow stages in FINAL-SPEC.md.
+7. Start the wizard on the New lead status instead of Prospect.
+
+8. List the relationship statuses, workflow stages and wizard defaults
+   in FINAL-SPEC.md.
 
 
 
@@ -34,8 +37,9 @@ Design Concept, Proposal, Accepted and Archived.
 
 This change renames the three stages in code and in the database.
 Production already has files with the old values, so ensureDatabase()
-moves them on the next start. Relationship statuses do not change. The
-wizard still defaults to Prospect.
+moves them on the next start, and local test databases move the same
+way. Relationship statuses do not change. The wizard now starts on New
+lead, as the screenshot shows.
 
 
 
@@ -47,6 +51,8 @@ wizard still defaults to Prospect.
   design_concept.
 - atlas-primitives.tsx: workflowReadyLabel() branches on the new values.
 - src/app/mockup/mock-data.ts: the mock files use the new values.
+- file-wizard.tsx: relationshipStatus starts as new_lead. The edit form
+  keeps its prospect fallback, since it always edits an existing file.
 - file-images-panel.tsx keeps before_photo and site_visit. Those are
   image kinds, a separate enum.
 - tests/workflow-stage-migration.test.ts is new. milestone2 and
