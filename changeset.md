@@ -1,49 +1,44 @@
-[DOCS]: Adopt the git bible so every change lands through a PR
-# v0.2.1 | Focus: Repository
+[FEATURE]: Skip device login when Atlas runs under next dev
+# v0.3.0 | Focus: Device login
 
 -------------------------------- ✦ DETAILS ✦ --------------------------------
 
 ## TASKS
 -----------------------------------------------------------------------------
-1. Add maintain.md with section 3 of the git bible and Atlas additions.
+1. Treat every request as signed in when NODE_ENV is development.
 
-2. Rewrite AGENTS.md with a read-first list and the repository rules.
-
-3. Add docs/git-workflow.md for the master trunk, branch roots,
-   worktrees and the merge.
-
-4. Add a typecheck script so the gate is bun run typecheck, lint, test.
+2. Keep the activity ping answering 200 in development, so the client
+   does not bounce to /login.
 
 
 
 ## DESCRIPTION
 -----------------------------------------------------------------------------
-Atlas had no written rules for branches, commits or pull requests, so
-agents committed straight to master. It now follows the git bible. Each
-change gets a <root>/<change> branch and a PR built from changeset.md,
-then a squash merge and a tag on master.
-
-The trunk stays master. Renaming it to main would break the remote and
-open clones, so the docs tell agents to read master wherever the bible
-or a skill says main.
+Every new worktree has its own database, so viewing a branch locally
+meant enrolling a device, approving it with the CLI and setting a PIN.
+Under next dev, Atlas now lets every request through. A real device
+session still wins when one exists. Production builds run with NODE_ENV
+production and keep the full device login.
 
 
 
 
 ## TECHNICAL NOTES
 -----------------------------------------------------------------------------
-- maintain.md copies bible section 3 verbatim, then ATLAS ADDITIONS:
-  the Focus rule, the master trunk, and changeset.md as the version.
+- src/services/auth/session.ts: getAuthenticatedSession() and
+  touchCurrentSession() fall back to DEV_SESSION in development.
 
-- AGENTS.md keeps the create-next-app Next.js rules block unchanged.
+- No caller reads fields off the session, only its truthiness, so the
+  { dev: true } stub needs no other change.
 
-- Branch roots follow src/features: references, files, atlas-image,
-  pipelines, auth. Type roots docs, fix and chore cover the rest.
+- /login redirects to /files in development, since isAuthenticated()
+  is always true there.
 
-- package.json: added "typecheck": "tsc --noEmit".
+- Checked at localhost:3210/references on 26 October: the catalog
+  loads with no device enrolled.
 
-- UNVERIFIED: the gate did not run. The checkout has no node_modules,
-  so tsc reports 3747 missing-module errors and eslint is not found.
+- eslint passes on session.ts. tsc shows only the 4 existing bun:test
+  type errors in tests/.
 
 
 -----------------------------------------------------------------------------
