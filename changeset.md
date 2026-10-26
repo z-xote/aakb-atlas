@@ -93,9 +93,10 @@ ATLAS_CLI_ADMIN_TOKEN bearer token.
 
 - Dependencies: add @clerk/nextjs 7.9.20, remove openpgp.
 
-- Gate: bun test 32 pass, 2 fail. Both failures are the known Milestone
-  1 tests on master. typecheck shows only "Cannot find module bun:test",
-  now 6 instead of 5 because of the new test file. lint is clean.
+- Gate after merging master at 72678e3: bun test 33 pass, 2 fail. Both
+  failures are the known Milestone 1 tests on master. typecheck shows
+  only "Cannot find module bun:test", 7 times, one per test file. lint is
+  clean.
 
 - UNVERIFIED: Google sign-in end to end, locally and on
   atlas.allaboutkitchens.nz. .env has no Clerk keys yet and the
