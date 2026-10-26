@@ -83,6 +83,18 @@ function ensureColumn(connection: Database, table: string, column: string, defin
   }
 }
 
+const renamedWorkflowStages = [
+  ["before_photo", "site_visit"],
+  ["image_concept", "design_concept"],
+  ["proposal_needed", "proposal"],
+] as const;
+
+export function migrateWorkflowStages(connection: Database) {
+  for (const [from, to] of renamedWorkflowStages) {
+    connection.run("UPDATE files SET workflow_stage = ? WHERE workflow_stage = ?", [to, from]);
+  }
+}
+
 export async function ensureDatabase() {
   if (ready) {
     return;
@@ -316,6 +328,7 @@ export async function ensureDatabase() {
   ensureColumn(connection, "file_assets", "updated_at", "INTEGER NOT NULL DEFAULT 0");
   connection.run("UPDATE file_assets SET updated_at = created_at WHERE updated_at = 0");
   connection.run("DELETE FROM file_assets WHERE id = 'asset_seed_sarah_before' AND url = ''");
+  migrateWorkflowStages(connection);
 
   await seedDatabase(connection);
   ready = true;
@@ -343,7 +356,7 @@ async function seedDatabase(connection: Database) {
         "file_seed_sarah",
         "Sarah M. - Kitchen island refresh",
         "qualified_lead",
-        "image_concept",
+        "design_concept",
         "kitchen",
         "35k_50k",
         "renovation",

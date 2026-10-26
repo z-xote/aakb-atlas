@@ -20,7 +20,7 @@ const schema = await import("@/db/schema");
 const fileInput = {
   title: "Milestone 3 bathroom",
   relationshipStatus: "qualified_lead" as const,
-  workflowStage: "image_concept" as const,
+  workflowStage: "design_concept" as const,
   projectType: "bathroom" as const,
   budgetRange: "20k_35k" as const,
   jobType: "renovation" as const,

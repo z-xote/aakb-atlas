@@ -1,74 +1,67 @@
-[FEATURE]: Skip device login locally only when ATLAS_DEV_AUTH_BYPASS is set
-# v0.5.0 | Focus: Device login
+[FEATURE]: Rename workflow stages to Site Visit, Design Concept, Proposal
+# v0.6.0 | Focus: File wizard
 
 -------------------------------- ✦ DETAILS ✦ --------------------------------
 
 ## TASKS
 -----------------------------------------------------------------------------
-1. Add the ATLAS_DEV_AUTH_BYPASS flag to the env schema and its name to
-   .env.example. The values 1 and true turn it on.
+1. Rename the stage values before_photo to site_visit, image_concept to
+   design_concept and proposal_needed to proposal.
 
-2. Return a fixed dev@local session from getAuthenticatedSession() and
-   requireAuth() when the flag is set and NODE_ENV is not production.
+2. Show the labels Site Visit, Design Concept and Proposal in the wizard,
+   the edit form, file details, the pipelines page and the files list.
 
-3. Answer the activity ping for the dev session too, so the client does
-   not bounce to /login.
+3. Move stored files to the new values when ensureDatabase() runs. The
+   UPDATE runs on every start and changes nothing the second time.
 
-4. Log a warning at startup when the flag is set in production, and
-   keep device login on.
+4. Seed the sample file with design_concept.
 
-5. Show a "Dev mode, login skipped" badge in the app shell header while
-   the bypass is on.
+5. Change the ready labels to "Site visit needed" and "Design concept
+   ready". "Proposal needed" stays.
 
-6. Add unit tests for the flag in development, without the flag, and in
-   production.
+6. Add a test that maps the old values to the new ones and runs the
+   migration twice.
+
+7. Start the wizard on the New lead status instead of Prospect.
+
+8. List the relationship statuses, workflow stages and wizard defaults
+   in FINAL-SPEC.md.
 
 
 
 ## DESCRIPTION
 -----------------------------------------------------------------------------
-Under next dev, Atlas let every request through with no way to turn it
-off. Testing the real login locally was not possible, and the screen gave
-no sign that login was skipped.
+Step 3 of the new-file wizard offered Before photo, Image concept and
+Proposal needed. Varshil wants the stages to read New file, Site Visit,
+Design Concept, Proposal, Accepted and Archived.
 
-The skip is now opt-in. Set ATLAS_DEV_AUTH_BYPASS=1 to work without a
-device and PIN. Without the flag, next dev asks for the device login
-again. Production ignores the flag. The bypass lives inside the two guard
-functions, so no page or API route changes, and the Clerk work in VAR-27
-can keep it. requireCliAdmin() still needs the bearer token.
-
+This change renames the three stages in code and in the database.
+Production already has files with the old values, so ensureDatabase()
+moves them on the next start, and local test databases move the same
+way. Relationship statuses do not change. The wizard now starts on New
+lead, as the screenshot shows.
 
 
 
 ## TECHNICAL NOTES
 -----------------------------------------------------------------------------
-- src/services/auth/dev-bypass.ts holds isDevAuthBypassActive() and
-  DEV_SESSION. DEV_SESSION has the same shape as a findActiveSession()
-  row, with device name dev@local.
-
-- src/services/auth/session.ts checks the bypass first in
-  getAuthenticatedSession(), requireAuth() and touchCurrentSession(). The
-  bypass skips the cookie and database lookup. The old NODE_ENV
-  development fallback is gone.
-
-- src/services/env.ts parses the flag to a boolean and warns once when
-  it is set with NODE_ENV production.
-
-- src/components/app-shell.tsx renders the badge. AppShell is a server
-  component, so the flag never reaches the client bundle.
-
-- tests/dev-auth-bypass.test.ts covers the three flag cases and the dev
-  session shape.
-
-- Gate: bun run lint passes. bun test: 28 pass, 2 fail. bun run
-  typecheck: 5 errors, all "Cannot find module bun:test" in tests/. The
-  same failures exist on master: 4 type errors, the same 2 tests. Both
-  failing milestone1 tests pass when run alone. INFERRED: another test
-  file loads src/services/env.ts before milestone1 sets process.env.
-
-- UNVERIFIED: the dev server was not run. The badge and the bypass on
-  pages and /api/files/** and /api/references/** routes were not checked
-  in a browser.
+- src/types/atlas.ts: workflowStages and workflowStageLabels.
+- src/db/client.ts: migrateWorkflowStages() runs one UPDATE per renamed
+  stage, called in ensureDatabase() before the seed. The seed row uses
+  design_concept.
+- atlas-primitives.tsx: workflowReadyLabel() branches on the new values.
+- src/app/mockup/mock-data.ts: the mock files use the new values.
+- file-wizard.tsx: relationshipStatus starts as new_lead. The edit form
+  keeps its prospect fallback, since it always edits an existing file.
+- file-images-panel.tsx keeps before_photo and site_visit. Those are
+  image kinds, a separate enum.
+- tests/workflow-stage-migration.test.ts is new. milestone2 and
+  milestone3 tests use the new values.
+- v0.6.0: this PR merges before #5 and #6, so it takes the next tag
+  after v0.5.0. #5 and #6 move up to v0.7.0 and v0.8.0.
+- Gate: typecheck shows only the known "bun:test" errors, lint is clean,
+  bun test shows 29 pass and the 2 known Milestone 1 failures.
+- UNVERIFIED: the screens were not checked in a browser.
 
 
 -----------------------------------------------------------------------------
