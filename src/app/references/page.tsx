@@ -5,6 +5,8 @@ import { requireAuth } from "@/services/auth/session";
 
 export const dynamic = "force-dynamic";
 
+const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+
 export default async function ReferencesPage() {
   await requireAuth();
   const catalog = await listReferenceCatalog();
@@ -15,7 +17,7 @@ export default async function ReferencesPage() {
         <div className="atlas-files-heading">
           <div className="atlas-heading">
             <h1>Reference catalog</h1>
-            <p className="atlas-subtle">{catalog.images.length} references · {catalog.categories.length} categories · curated inputs shared across every file.</p>
+            <p className="atlas-subtle">{plural(catalog.images.length, "reference")} · {plural(catalog.categories.length, "category", "categories")} · curated inputs shared across every file.</p>
           </div>
         </div>
         <ReferenceCatalog {...catalog} />
