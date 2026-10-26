@@ -1,16 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { asc, eq } from "drizzle-orm";
+import { asc, count, eq } from "drizzle-orm";
 
 import { getDb, persistDatabase } from "@/db/client";
-import { referenceCategories, referenceImages } from "@/db/schema";
+import { atlasImageSessionReferences, referenceCategories, referenceImages } from "@/db/schema";
 import { ApiError } from "@/services/api/response";
-import { uploadStoredObject, type StoredObject } from "@/services/bunny/client";
+import { deleteStoredObject, uploadStoredObject, type StoredObject } from "@/services/bunny/client";
 
 export type ReferenceObjectWriter = (input: {
   objectPath: string;
   bytes: Uint8Array;
   contentType: string;
 }) => Promise<StoredObject>;
+
+export type ReferenceObjectRemover = (storageKey: string) => Promise<void>;
 
 export type ReferenceDto = {
   id: string;
@@ -122,4 +124,36 @@ export async function uploadReferenceImage(input: {
     throw error;
   }
   return { ...row, categorySlug: category.slug, categoryLabel: category.label, tags: input.tags, url: row.publicUrl };
+}
+
+export async function deleteReferenceImage(id: string, removeObject: ReferenceObjectRemover = deleteStoredObject) {
+  const db = await getDb();
+  const image = db.select().from(referenceImages).where(eq(referenceImages.id, id)).get();
+  if (!image) throw new ApiError(404, "reference_not_found", "No reference matches that ID.");
+
+  const [{ sessions }] = db
+    .select({ sessions: count() })
+    .from(atlasImageSessionReferences)
+    .where(eq(atlasImageSessionReferences.referenceId, id))
+    .all();
+  if (sessions > 0) {
+    throw new ApiError(
+      409,
+      "reference_in_use",
+      `“${image.label}” is used by ${sessions} Atlas image ${sessions === 1 ? "session" : "sessions"}. Remove it from ${sessions === 1 ? "that session" : "those sessions"} before deleting it.`,
+      { sessions }
+    );
+  }
+
+  db.delete(referenceImages).where(eq(referenceImages.id, id)).run();
+  await persistDatabase();
+  // The row is gone first so a storage failure leaves an orphaned object, never a broken card.
+  let storageRemoved = true;
+  try {
+    await removeObject(image.storageKey);
+  } catch (error) {
+    storageRemoved = false;
+    console.error("Reference object removal failed after metadata delete", { referenceId: id, storageKey: image.storageKey, error });
+  }
+  return { id, label: image.label, storageRemoved };
 }

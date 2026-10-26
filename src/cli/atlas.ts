@@ -123,6 +123,13 @@ async function referencesCommand() {
     print(row, () => console.log(`${row.id}\n${row.label}\nCategory: ${row.categorySlug}\nTags: ${row.tags.join(", ")}\nURL: ${row.url}`));
     return;
   }
+  if (action === "delete") {
+    const id = args[2];
+    if (!id) fail("references delete requires an ID.", 3);
+    const row = await request<{ id: string; label: string; storageRemoved: boolean }>(`/api/admin/references/${encodeURIComponent(id)}`, { method: "DELETE" });
+    print(row, () => console.log(`Deleted ${row.label} (${row.id}).${row.storageRemoved ? "" : "\nThe stored image could not be removed; check the server log."}`));
+    return;
+  }
   if (action === "upload") {
     const filename = args[2];
     const category = option("--category");
@@ -147,7 +154,7 @@ async function referencesCommand() {
     print(row, () => console.log(`Uploaded ${row.label} (${row.id}) to ${row.categorySlug}.\n${row.url}`));
     return;
   }
-  fail("Use: atlas references list|search|get|upload|categories", 3);
+  fail("Use: atlas references list|search|get|upload|delete|categories", 3);
 }
 
 async function main() {

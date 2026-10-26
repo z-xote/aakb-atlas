@@ -1,90 +1,94 @@
-[FIX]: Keep reference cards on screen and scrollable on phone and iPad
-# v0.4.0 | Focus: Atlas image workspace and reference catalog
+[FEATURE]: Add and delete references from the Reference catalog page
+# v0.5.0 | Focus: Reference catalog
 
 -------------------------------- ✦ DETAILS ✦ --------------------------------
 
 ## TASKS
 -----------------------------------------------------------------------------
-1. Size the Atlas image workspace to the space between the topbar and
-   the bottom actions on screens 1024 px and wider.
+1. Add an "Add reference" button and form to the Reference catalog. The
+   form takes an image, a label, an existing category and tags.
 
-2. Scroll the reference list inside its panel. The panel stops at 75%
-   of the screen height, 720 px at most, when the panels stack.
+2. Add a delete button to each reference card. A confirm dialog names the
+   reference before the delete runs.
 
-3. Cap the direction log at 40% of the screen height when the panels
-   stack.
+3. Add POST /api/references and DELETE /api/references/[id]. Both need a
+   signed-in session and return 401 without one.
 
-4. Fit reference cards to the panel width, at least 140 px per card.
+4. Add deleteReferenceImage() in src/features/references/data.ts. It
+   removes the row, then the stored object at storage_key.
 
-5. Show each reference image whole, letterboxed in a 4:3 tile.
+5. Block the delete with 409 reference_in_use while an Atlas image
+   session still uses the reference.
 
-6. Move the output quality buttons under the composer in the first
-   column.
+6. Move the upload form checks into readReferenceUploadForm() so the
+   admin route and the session route apply the same limits.
 
-7. Let the source header wrap so "Change source" moves to its own line
-   on a phone.
+7. Add DELETE /api/admin/references/[id] and the CLI command
+   atlas references delete <id>.
 
-8. Show two catalog columns on a phone and three on a tablet, with
-   whole images.
+8. Update FINAL-SPEC.md so the catalog is no longer browse-only.
+
+9. Add tests for the delete service and for the auth guards.
 
 
 
 ## DESCRIPTION
 -----------------------------------------------------------------------------
-Varshil reported that the reference cards on the Atlas image workspace
-had no cut-off and no scroll at any screen size. It was worst on phone
-and iPad. The reference panel grew to fit every card, so the page grew
-with it. At 1024x768 the page was 1422 px tall. At 768x1024 it was
-2264 px tall, with two oversized cards per row. The tiles also cropped
-tall and wide images.
+A signed-in user could only browse the Reference catalog. Adding or
+removing a reference needed the CLI and the admin token.
 
-The workspace now fills the screen on iPad landscape and desktop. The
-reference list scrolls inside its panel. On phone and iPad portrait the
-panels stack, and each panel has a height limit. Images keep their full
-shape, uncropped. The output quality row moved into the first column, so
-the panels get its height back.
+The catalog page now has an Add reference form and a delete button on
+each card. After either action the page calls router.refresh(), so the
+catalog updates without a full reload.
 
-Fixes VAR-26.
+The upload reuses uploadReferenceImage() and the admin route's checks. It
+accepts image/* only, up to 12 MB. The route records the session's
+device as created_by. Delete is a hard delete of the row and the stored
+file. A reference that an Atlas image session still uses cannot be
+deleted. The dialog says how many sessions use it. Generations keep their
+own reference snapshot, so they never block a delete.
+
+Category creation stays in the CLI. Every signed-in user can add and
+delete, because Atlas has no roles yet. VAR-27 may add them.
 
 
 
 
 ## TECHNICAL NOTES
 -----------------------------------------------------------------------------
-- src/features/atlas-image/components/workspace.tsx: main gets
-  lg:flex-none and lg:h-[calc(100dvh-var(--atlas-topbar-h)-78px)].
-  With flex-1 alone, main grew past that height.
+- Ticket VAR-29. It supersedes the browse-only rule in FINAL-SPEC.md
+  sections 5.6, 6, 9, 12, 16 and 17.
 
-- workspace.tsx: the panel grid uses lg:grid-rows-[minmax(0,1fr)] and
-  lg:min-h-[420px] in place of min-h-[560px].
+- src/features/references/schemas.ts: readReferenceUploadForm() and
+  MAX_REFERENCE_UPLOAD_BYTES. The admin upload route now calls it.
 
-- workspace.tsx: the reference grid uses
-  grid-cols-[repeat(auto-fill,minmax(140px,1fr))]. The result is 2
-  columns at 375 px, 4 at 768 px and 3 at 1024 px and wider.
+- src/features/references/data.ts: deleteReferenceImage(id, remover)
+  counts atlas_image_session_references rows first. The row goes before
+  the object, so a storage failure leaves an orphaned file and a log
+  line, never a broken card. The result carries storageRemoved.
 
-- workspace.tsx: reference Image uses object-contain and sizes
-  "(min-width: 1024px) 20vw, 50vw".
+- src/services/bunny/client.ts: deleteStoredObject() removes the local
+  file or sends a Bunny DELETE. A 404 counts as removed.
 
-- src/features/references/reference-catalog.tsx: the grid uses
-  grid-cols-2 md:grid-cols-3 lg:grid-cols-4. The img uses object-contain
-  on --atlas-bg-muted.
+- src/features/references/actor.ts: sessionActor() gives "device:<id>",
+  or "dev" for the next dev login bypass. This change leaves session.ts
+  alone.
 
-- Checked in the browser at 375x812, 768x1024, 1024x768 and 1440x900.
-  Data was a local DB copy with 12 test references from 1:5 to 3:1, up
-  to 6000x4000. The document scrollWidth equals the viewport width at
-  every size. The page height equals the viewport at 1024x768 and
-  1440x900.
+- src/features/references/reference-dialogs.tsx: AddReferenceDialog and
+  DeleteReferenceDialog use a native <dialog> with showModal().
 
-- Not checked on a real phone or iPad. UNVERIFIED with production
-  reference images.
+- tests/references-crud.test.ts mocks next/headers with no cookie. It
+  covers unlinked delete, linked delete blocked, unknown ID, and
+  rejection on the session upload, session delete and admin delete.
 
-- Gate: bun run lint passes. bun run typecheck fails with TS2307 for
-  bun:test in tests/*.test.ts, files this change does not touch.
+- Gate: bun run lint passes. bun run typecheck shows only the 5 known
+  TS2307 bun:test errors, one per test file. The repo does not install
+  @types/bun. bun test: 30 pass, 2 fail. The 2 failures are in
+  milestone1.test.ts and fail the same way on a clean master. bun test
+  runs every file in one process, so env.ts keeps the first file's env.
 
-- Gate: bun test gives 24 pass and 2 fail when the four files run in one
-  process. The 2 failures are in milestone1 and hit live Bunny storage
-  and the CLI admin token. Run alone, tests/milestone1.test.ts passes.
-  The cause is INFERRED to be shared env state between test files.
+- UNVERIFIED: nobody opened the dialogs in a browser. Nobody ran the
+  Bunny DELETE call against a real storage zone.
 
 
 -----------------------------------------------------------------------------

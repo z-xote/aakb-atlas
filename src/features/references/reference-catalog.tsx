@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { SearchIcon, TerminalIcon, XIcon } from "lucide-react";
+import { PlusIcon, SearchIcon, TerminalIcon, Trash2Icon, XIcon } from "lucide-react";
 
 import type { ReferenceCategoryRow } from "@/db/schema";
 import type { ReferenceDto } from "@/features/references/data";
+import { AddReferenceDialog, DeleteReferenceDialog } from "@/features/references/reference-dialogs";
 
 export function ReferenceCatalog({
   categories,
@@ -15,6 +16,8 @@ export function ReferenceCatalog({
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
+  const [adding, setAdding] = useState(false);
+  const [deleting, setDeleting] = useState<ReferenceDto | null>(null);
   const filtered = useMemo(() => {
     const search = query.trim().toLowerCase();
     return images.filter((image) =>
@@ -30,11 +33,11 @@ export function ReferenceCatalog({
         <div className="flex items-start gap-3">
           <span className="grid size-9 shrink-0 place-items-center" style={{ borderRadius: "var(--atlas-radius)", background: "var(--atlas-accent-soft)", color: "var(--atlas-accent)" }}><TerminalIcon className="size-4" /></span>
           <div>
-            <p className="text-sm font-bold">Managed through the Atlas CLI</p>
-            <p className="atlas-muted mt-0.5 text-sm">Browse and search here; categories and uploads stay agent-managed.</p>
+            <p className="text-sm font-bold">Add here or through the Atlas CLI</p>
+            <p className="atlas-muted mt-0.5 text-sm">Add and delete references here; categories stay agent-managed.</p>
           </div>
         </div>
-        <code className="rounded border px-3 py-2 text-xs">atlas references upload …</code>
+        <button className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-bold text-white" onClick={() => setAdding(true)} style={{ background: "var(--atlas-accent)" }} type="button"><PlusIcon className="size-4" />Add reference</button>
       </div>
 
       <div className="mb-5 flex flex-col gap-4">
@@ -58,7 +61,10 @@ export function ReferenceCatalog({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img alt={image.label} className="aspect-4/3 w-full object-contain" src={image.url} style={{ background: "var(--atlas-bg-muted)" }} />
               <div className="p-3">
-                <strong className="block break-words text-sm">{image.label}</strong>
+                <div className="flex items-start justify-between gap-2">
+                  <strong className="block min-w-0 break-words text-sm">{image.label}</strong>
+                  <button aria-label={`Delete ${image.label}`} className="atlas-icon-button -mr-1.5 -mt-1.5 size-7 shrink-0" onClick={() => setDeleting(image)} type="button"><Trash2Icon /></button>
+                </div>
                 <span className="atlas-muted mt-1 block text-xs">{image.categoryLabel}</span>
                 {image.tags.length ? <div className="mt-2 flex flex-wrap gap-1">{image.tags.map((tag) => <span className="rounded-full border px-2 py-0.5 text-[11px]" key={tag}>{tag}</span>)}</div> : null}
               </div>
@@ -66,6 +72,9 @@ export function ReferenceCatalog({
           ))}
         </div>
       )}
+
+      {adding ? <AddReferenceDialog categories={categories} onClose={() => setAdding(false)} /> : null}
+      {deleting ? <DeleteReferenceDialog image={deleting} onClose={() => setDeleting(null)} /> : null}
     </>
   );
 }
