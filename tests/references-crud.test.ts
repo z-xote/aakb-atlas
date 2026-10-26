@@ -72,7 +72,7 @@ describe("deleteReferenceImage", () => {
     const fileId = await filesData.createFile({
       title: "Reference delete guard",
       relationshipStatus: "qualified_lead",
-      workflowStage: "image_concept",
+      workflowStage: "design_concept",
       projectType: "bathroom",
       budgetRange: "20k_35k",
       jobType: "renovation",

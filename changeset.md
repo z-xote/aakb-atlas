@@ -112,7 +112,7 @@ roles yet. VAR-27 may add them.
 
 - Gate: bun run lint passes. bun run typecheck shows only the 6 known
   TS2307 bun:test errors, one per test file. The repo does not install
-  @types/bun. bun test: 49 pass, 2 fail. The 2 failures are in
+  @types/bun. bun test: 50 pass, 2 fail. The 2 failures are in
   milestone1.test.ts and fail the same way on a clean master. bun test
   runs every file in one process, so env.ts keeps the first file's env.
 
