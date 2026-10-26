@@ -1,5 +1,5 @@
 [FEATURE]: Rename workflow stages to Site Visit, Design Concept, Proposal
-# v0.8.0 | Focus: File wizard
+# v0.6.0 | Focus: File wizard
 
 -------------------------------- ✦ DETAILS ✦ --------------------------------
 
@@ -57,8 +57,8 @@ lead, as the screenshot shows.
   image kinds, a separate enum.
 - tests/workflow-stage-migration.test.ts is new. milestone2 and
   milestone3 tests use the new values.
-- v0.8.0: open PRs #5 and #6 both claim v0.6.0, so one of them takes
-  v0.7.0 and this change takes the next free version.
+- v0.6.0: this PR merges before #5 and #6, so it takes the next tag
+  after v0.5.0. #5 and #6 move up to v0.7.0 and v0.8.0.
 - Gate: typecheck shows only the known "bun:test" errors, lint is clean,
   bun test shows 29 pass and the 2 known Milestone 1 failures.
 - UNVERIFIED: the screens were not checked in a browser.
