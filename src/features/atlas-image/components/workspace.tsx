@@ -14,6 +14,7 @@ import type { AtlasImageQuality } from "@/types/atlas";
 import { audioFormatFromContentType, audioRecordingFilename, selectAudioRecorderMimeType } from "@/features/atlas-image/audio";
 import { transcriptionToComposerDraft } from "@/features/atlas-image/schemas";
 import { AtlasImageGenerationProgress } from "@/features/atlas-image/components/generation-progress";
+import { createClientRequestId, generationFailureMessage, readGenerationResponse } from "@/features/atlas-image/client-request";
 
 type TranscriptionResponse = {
   ok: boolean;
@@ -206,11 +207,19 @@ export function AtlasImageWorkspace({
     if (!directions.length || busy) return;
     setBusy("generating");
     setError("");
-    const response = await fetch(`/api/files/${fileId}/atlas-image/generations`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId, clientRequestId: crypto.randomUUID(), quality }) });
-    const body = (await response.json()) as { ok: boolean; data?: { id?: string }; error?: { message?: string } };
-    if (!response.ok || !body.ok || !body.data?.id) { setError(body.error?.message ?? "Atlas could not start generation."); setBusy(""); return; }
-    router.push(`/files/${fileId}/pipelines/atlas-image/generations/${body.data.id}`);
-    router.refresh();
+    try {
+      const response = await fetch(`/api/files/${fileId}/atlas-image/generations`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId, clientRequestId: createClientRequestId(), quality }) });
+      const body = await readGenerationResponse(response);
+      if (response.ok && body?.ok && body.data?.id) {
+        router.push(`/files/${fileId}/pipelines/atlas-image/generations/${body.data.id}`);
+        router.refresh();
+        return;
+      }
+      setError(generationFailureMessage(response, body));
+    } catch {
+      setError("Atlas could not reach the server to start generation. Check the connection and try again.");
+    }
+    setBusy("");
   }
 
   if (busy === "generating") {
