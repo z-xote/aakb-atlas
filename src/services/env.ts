@@ -7,6 +7,10 @@ const envSchema = z.object({
   DATABASE_PATH: z.string().min(1).default("data/atlas.sqlite"),
   ATLAS_SESSION_COOKIE: z.string().min(1).default("atlas_device_session"),
   ATLAS_CLI_ADMIN_TOKEN: z.string().optional(),
+  ATLAS_DEV_AUTH_BYPASS: z
+    .string()
+    .optional()
+    .transform((value) => value === "1" || value === "true"),
   ATLAS_BASE_URL: z.url().default("http://localhost:3000"),
   ATLAS_STORAGE_DRIVER: z.enum(["bunny", "local"]).default("local"),
   ATLAS_STORAGE_PREFIX: z.string().default(""),
@@ -22,4 +26,10 @@ export const env = envSchema.parse(process.env);
 
 export function isProduction() {
   return env.NODE_ENV === "production";
+}
+
+if (env.ATLAS_DEV_AUTH_BYPASS && isProduction()) {
+  console.warn(
+    "ATLAS_DEV_AUTH_BYPASS is set in production. Ignoring it: device login stays on."
+  );
 }
