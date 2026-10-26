@@ -30,7 +30,7 @@ gh pr create --base master \
 | `files` | Files, site images, the file wizard, `src/features/files` |
 | `atlas-image` | Atlas image pipeline and workspace |
 | `pipelines` | Pipeline list and shared pipeline code |
-| `auth` | Device login, PIN, sessions |
+| `auth` | Clerk sign-in, email allowlist, dev bypass |
 | `docs`, `fix`, `chore` | Changes with no single area |
 
 ## Worktrees

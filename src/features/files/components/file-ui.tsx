@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { ArrowLeftIcon, LogOutIcon } from "lucide-react";
+import { ArrowLeftIcon } from "lucide-react";
 
 import { ThemeMenu } from "@/features/files/components/theme-menu";
-import { logoutAction } from "@/services/auth/actions";
+import { AtlasSignOutButton } from "@/features/auth/sign-out-button";
 import { cn } from "@/lib/utils";
 
 export {
@@ -73,14 +73,7 @@ export function AtlasTopbar({
       <div className="atlas-topbar-spacer" />
       <div className="atlas-topbar-actions">
         <ThemeMenu />
-        {showSignOut ? (
-          <form action={logoutAction}>
-            <button className="atlas-signout-button" type="submit">
-              <LogOutIcon />
-              <span>Sign out</span>
-            </button>
-          </form>
-        ) : null}
+        {showSignOut ? <AtlasSignOutButton /> : null}
       </div>
     </header>
   );

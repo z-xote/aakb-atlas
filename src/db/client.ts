@@ -167,65 +167,6 @@ export async function ensureDatabase() {
       FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
     );
 
-    CREATE TABLE IF NOT EXISTS device_enrollments (
-      id TEXT PRIMARY KEY,
-      code TEXT NOT NULL UNIQUE,
-      client_instance_id TEXT NOT NULL,
-      device_name TEXT NOT NULL,
-      public_key TEXT NOT NULL,
-      fingerprint TEXT NOT NULL,
-      proof_payload TEXT NOT NULL,
-      proof_verified_at INTEGER,
-      status TEXT NOT NULL,
-      approved_device_id TEXT,
-      expires_at INTEGER NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS device_enrollments_fingerprint_idx
-      ON device_enrollments(fingerprint);
-
-    CREATE TABLE IF NOT EXISTS devices (
-      id TEXT PRIMARY KEY,
-      device_name TEXT NOT NULL,
-      public_key TEXT NOT NULL,
-      fingerprint TEXT NOT NULL UNIQUE,
-      status TEXT NOT NULL,
-      pin_hash TEXT,
-      pin_salt TEXT,
-      pin_reset_required INTEGER NOT NULL DEFAULT 1,
-      failed_attempt_count INTEGER NOT NULL DEFAULT 0,
-      first_failed_at INTEGER,
-      locked_until INTEGER,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS auth_challenges (
-      id TEXT PRIMARY KEY,
-      device_id TEXT,
-      purpose TEXT NOT NULL,
-      canonical_payload TEXT NOT NULL,
-      expires_at INTEGER NOT NULL,
-      consumed_at INTEGER,
-      created_at INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS auth_challenges_device_idx
-      ON auth_challenges(device_id);
-
-    CREATE TABLE IF NOT EXISTS device_sessions (
-      id TEXT PRIMARY KEY,
-      token_hash TEXT NOT NULL UNIQUE,
-      device_id TEXT NOT NULL,
-      last_activity_at INTEGER NOT NULL,
-      expires_at INTEGER NOT NULL,
-      revoked_at INTEGER,
-      created_at INTEGER NOT NULL,
-      FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS device_sessions_device_idx
-      ON device_sessions(device_id);
-
     CREATE TABLE IF NOT EXISTS reference_categories (
       id TEXT PRIMARY KEY,
       slug TEXT NOT NULL UNIQUE,
@@ -314,6 +255,14 @@ export async function ensureDatabase() {
     );
     CREATE INDEX IF NOT EXISTS atlas_image_generations_file_idx
       ON atlas_image_generations(file_id, created_at);
+  `);
+
+  // VAR-27: Clerk replaced device login, so its tables go. Children first.
+  connection.exec(`
+    DROP TABLE IF EXISTS device_sessions;
+    DROP TABLE IF EXISTS auth_challenges;
+    DROP TABLE IF EXISTS devices;
+    DROP TABLE IF EXISTS device_enrollments;
   `);
 
   ensureColumn(connection, "file_assets", "status", "TEXT NOT NULL DEFAULT 'pending'");

@@ -1,143 +1,111 @@
-[FEATURE]: Manage references and categories in the catalog and the CLI
-# v0.7.0 | Focus: Reference catalog
+[FEATURE]: Sign in to Atlas with Google through Clerk, allowlisted emails only
+# v0.8.0 | Focus: Sign-in
 
 -------------------------------- ✦ DETAILS ✦ --------------------------------
 
 ## TASKS
 -----------------------------------------------------------------------------
-1. Add an "Add reference" form to the Reference catalog. It has an image
-   drop zone with a preview, a label, category chips and tag chips.
+1. Rebuild requireAuth() and getAuthenticatedSession() on Clerk
+   currentUser() and keep their call sites unchanged.
 
-2. Add a "New category" chip. The category is created when the
-   reference is saved, so a cancelled form leaves no empty category.
+2. Allow only a verified primary email listed in ATLAS_ALLOWED_EMAILS.
 
-3. Add a Rename button on the selected category filter.
+3. Send signed-out pages to /sign-in and outside accounts to
+   /not-authorised. API routes answer 401 signed out and 403 outside.
 
-4. Add edit and delete buttons to each reference card. Edit opens the
-   same form, filled in, and can replace the image.
+4. Add src/proxy.ts with clerkMiddleware(), ClerkProvider in the root
+   layout, a Clerk sign-in page and a Clerk sign-out button.
 
-5. Ask for confirmation before a delete, and name the reference.
+5. Skip Clerk entirely when ATLAS_DEV_AUTH_BYPASS is active.
 
-6. Block the delete with 409 reference_in_use while an Atlas image
-   session still uses the reference.
+6. Delete the device enrollment, PIN, session cookie and activity code,
+   the /api/device routes, the admin device routes and atlas devices.
 
-7. Remove a category when its last reference is deleted or moved out.
+7. Drop the device_enrollments, devices, auth_challenges and
+   device_sessions tables on database start.
 
-8. Add POST /api/references, PATCH and DELETE /api/references/[id],
-   and PATCH /api/references/categories/[slug]. Each needs a signed-in
-   session. Upload and edit accept newCategory in place of category.
+8. Allow the Clerk Development hosts in the CSP.
 
-9. Add matching admin routes and the CLI commands atlas references
-   edit, atlas references delete and atlas references categories
-   rename. categories create now works from --label alone.
+9. Rewrite FINAL-SPEC.md section 5.1 for Clerk sign-in.
 
-10. Share the image checks between every reference route.
-
-11. Update FINAL-SPEC.md so the catalog is no longer browse-only.
-
-12. Add tests for the delete, edit, rename, new category and category
-    clean-up services and for the auth guards.
+10. Add tests for the allowlist, the 401 and 403 answers, the page
+    redirects and the dev bypass.
 
 
 
 ## DESCRIPTION
 -----------------------------------------------------------------------------
-A signed-in user could only browse the Reference catalog. Adding,
-changing or removing a reference needed the CLI and the admin token.
-Categories could only be added through the CLI and never renamed.
+Atlas used OpenPGP device enrollment, a CLI approval, a PIN and its own
+session cookie. Megan and Wayne need a normal sign-in instead.
 
-The catalog page now has an Add reference form, a New category chip,
-a Rename button for the selected category, and edit and delete buttons
-on each card. After each action the page
-calls router.refresh(), so the catalog updates without a full reload.
+Atlas now signs people in with Google through the existing Clerk
+Development instance of the AAKB Atlas application. Clerk proves who the
+person is. Atlas then lets in only a verified primary email on the
+ATLAS_ALLOWED_EMAILS list. Any other Google account sees a "Not
+authorised" page with a sign-out button, and the API refuses it.
 
-Every upload reuses the admin route's checks. It accepts image/* only,
-up to 12 MB. The route records the session's device as created_by.
-Delete removes the row and the stored file. A reference that an Atlas
-image session still uses cannot be deleted, and the dialog says how
-many sessions use it. Generations keep their own reference snapshot, so
-they never block a delete.
+The old login is gone, not hidden. Its routes return 404, nothing reads
+the atlas_device_session cookie, and its tables are dropped. Old device
+sessions therefore stop working at the first request after deploy.
 
-A category disappears with its last reference, so nobody deletes
-categories by hand. Categories that never had a reference stay. The
-CLI offers the same operations, so an agent can do anything the page
-does. Every signed-in user can make these changes, because Atlas has no
-roles yet. VAR-27 may add them.
+The two guard functions keep their names and return a session or null,
+so the page and API call sites, about 40, did not change. The CLI keeps its
+ATLAS_CLI_ADMIN_TOKEN bearer token.
 
 
 
 
 ## TECHNICAL NOTES
 -----------------------------------------------------------------------------
-- Ticket VAR-29. It supersedes the browse-only rule in FINAL-SPEC.md
-  sections 5.6, 6, 9, 12, 16 and 17.
+- src/services/auth/access.ts holds resolveAccess() and
+  parseAllowedEmails(). They are pure functions, so tests need no Clerk.
 
-- src/features/references/schemas.ts: readReferenceUploadForm()
-  requires every field and an image. readReferenceEditForm() reads only
-  the fields sent; an empty tags field clears the tags.
-  categorySlug() turns a label into a slug. categoryCreateSchema now
-  takes an optional slug and sortOrder.
+- src/services/auth/session.ts: getAccess() returns signed_out,
+  not_authorised or allowed. getAuthenticatedSession() throws
+  ApiError(403) for not_authorised. Every caller is inside
+  withApiErrors(), so the throw becomes a 403 response.
 
-- src/features/references/data.ts: resolveCategory() creates or reuses
-  a named newCategory. If the upload then fails, the new category is
-  dropped again. addReferenceCategory() appends after
-  the highest sort_order. renameReferenceCategory() changes label and
-  slug and refuses a taken slug. updateReferenceImage() keeps fields
-  the edit leaves out. A new image goes under a new key, and the old
-  object is removed after the row update. deleteReferenceImage()
-  counts atlas_image_session_references rows first.
-  dropCategoryIfEmpty() runs after a delete or a category move, and
-  both results report categoryRemoved and storageRemoved.
+- The session shape is now { userId, email }. DEV_SESSION is
+  { userId: "dev-local", email: "dev@local" }. sessionActor() in
+  src/features/references/actor.ts, from VAR-29, now stores the email
+  as reference_images.created_by instead of device:<id>.
 
-- src/services/bunny/client.ts: deleteStoredObject() removes the local
-  file or sends a Bunny DELETE. A 404 counts as removed.
+- Next 16 renames middleware to proxy, per
+  node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md.
+  The proxy only attaches Clerk state. The guards decide access.
 
-- src/features/references/actor.ts: sessionActor() returns
-  "device:<id>". The dev bypass session reports device "dev-local".
+- Under the dev bypass the proxy skips clerkMiddleware() and the layout
+  skips ClerkProvider, so local runs need no Clerk keys. The
+  ClerkEnabled context hides the sign-out button in that mode, because
+  file-ui.tsx also loads in client components and cannot read env.
 
-- src/features/references/reference-dialogs.tsx: ReferenceFormDialog
-  serves add and edit. ImageDrop, CategoryPicker and TagInput live in
-  the same file, with CategoryRenameDialog. Dialogs use a native
-  <dialog> with showModal(). The catalog filters by category id, so a
-  rename keeps the filter.
+- Migration: the repo has no drizzle-kit migration history. Its schema
+  lives in ensureDatabase() in src/db/client.ts, so the DROP TABLE IF
+  EXISTS statements live there too. The four tables are dropped, not
+  frozen.
 
-- src/app/references/page.tsx: the count line says "1 category" and
-  "1 reference" in the singular.
+- next.config.ts: CSP adds https://*.clerk.accounts.dev,
+  challenges.cloudflare.com, *.protect.clerk.com and clerk-telemetry.
+  /login redirects to /sign-in.
 
-- tests/references-crud.test.ts mocks next/headers with no cookie. It
-  covers delete, linked delete, unknown ID, category slug and order,
-  new category with a reference, cleanup after a failed upload,
-  rename, category clean-up, partial edit, edit with a new image, and
-  401 on every session route.
+- env: ATLAS_SESSION_COOKIE is removed and ATLAS_ALLOWED_EMAILS is
+  added. .env.example lists NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+  CLERK_SECRET_KEY, NEXT_PUBLIC_CLERK_SIGN_IN_URL and
+  ATLAS_ALLOWED_EMAILS.
 
-- Gate: bun run lint passes. bun run typecheck shows only the 6 known
-  TS2307 bun:test errors, one per test file. The repo does not install
-  @types/bun. bun test: 50 pass, 2 fail. The 2 failures are in
-  milestone1.test.ts and fail the same way on a clean master. bun test
-  runs every file in one process, so env.ts keeps the first file's env.
+- Dependencies: add @clerk/nextjs 7.9.20, remove openpgp.
 
-- Browser check on a throwaway database, port 3211: added a reference
-  with a new category and tags, edited a label, renamed a category.
-  Each refreshed in place with no server errors.
+- Gate after merging master at 59816fe: bun test 54 pass, 2 fail. Both
+  failures are the known Milestone 1 tests on master. typecheck shows
+  only "Cannot find module bun:test", 8 times, one per test file. lint is
+  clean.
 
-- CLI check against port 3211: categories create --label, upload, edit
-  label and tags, edit --image, categories rename, edit --category
-  that emptied and removed the old category, delete, and the usage
-  error with exit code 3.
+- UNVERIFIED: Google sign-in end to end, locally and on
+  atlas.allaboutkitchens.nz. .env has no Clerk keys yet and the
+  allowlist emails are not set. bun run build was not run.
 
-- Codex gpt-6.1 drove real Chrome through its Chrome plugin, not
-  Computer Use. It passed the dialog layout, new category, tags, edit,
-  close without saving, rename, duplicate rename, linked delete, move
-  out, 820 and 400 px widths, reload and console steps. It could not
-  attach files: its page evaluator has no fetch or DataTransfer.
-
-- The file steps ran in the Claude browser pane instead: wrong type,
-  over 12 MB, drop preview, add with a new category, cancel leaving
-  no category, image swap with the old file gone, delete of the last
-  reference with its category and file gone, move out, and reload.
-
-- UNVERIFIED: a real drag from Finder, and the Bunny DELETE call
-  against a real storage zone.
+- INFERRED: the Development Frontend API host matches
+  *.clerk.accounts.dev.
 
 
 -----------------------------------------------------------------------------

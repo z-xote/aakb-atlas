@@ -2,7 +2,7 @@ import { env } from "@/services/env";
 
 export function getAuthEnv() {
   return {
-    cookieName: env.ATLAS_SESSION_COOKIE,
+    allowedEmails: env.ATLAS_ALLOWED_EMAILS,
     cliAdminToken: env.ATLAS_CLI_ADMIN_TOKEN,
   };
 }

@@ -59,19 +59,20 @@ The existing production navigation shell is part of Atlas's identity and is not 
 
 ## 5. Canonical user flows
 
-### 5.1 Device enrollment and unlock
+### 5.1 Sign in with Clerk
 
-1. An unknown device generates its own OpenPGP signing key locally.
-2. Atlas receives the public key and creates a time-limited pending enrollment.
-3. The device proves possession of the private key and displays a six-digit activation code plus a short fingerprint.
-4. The owner or an authorized AI agent runs `atlas devices approve <code>`.
-5. The device polls the enrollment status. Once approved, it sets and confirms a four-digit PIN.
-6. On later launches, Atlas requests a server challenge. The device signs it and submits the signature plus PIN.
-7. Atlas issues an HTTP-only session after both device proof and PIN verification succeed.
-8. The session locks after 15 minutes of inactivity. A browser-session restart also requires unlock.
-9. **Forgot PIN** instructs the user to contact the developer. `atlas devices reset-pin <device>` revokes active sessions and marks the device to set a new PIN after another valid key proof; the device key remains approved.
+Clerk replaced device enrollment and the PIN in v0.8.0 (VAR-27). Device, PIN and session-cookie text elsewhere in this spec is historical.
 
-The four-digit PIN is server-verified and rate-limited. It must not be used directly as encryption material for the private key.
+1. Atlas uses the existing Clerk Development instance of the AAKB Atlas application. Google is the only sign-in method.
+2. A signed-out visitor to any page is sent to `/sign-in`, which shows Clerk's `<SignIn />` with "Continue with Google". `/login` redirects there.
+3. After Google sign-in, Atlas reads the user's primary email from Clerk. Access needs that email to be verified and listed in `ATLAS_ALLOWED_EMAILS`, a comma-separated list compared without regard to case.
+4. A signed-in account that is not on the list sees `/not-authorised`, which names the account and offers sign out. API routes answer it with 403 `not_authorised`.
+5. A signed-out API request gets 401.
+6. **Sign out** ends the Clerk session and returns to `/sign-in`. Clerk owns session lifetime; Atlas keeps no session table or cookie of its own.
+7. `requireAuth()` (pages and server actions) and `getAuthenticatedSession()` (API routes) in `src/services/auth/session.ts` make every access decision. `src/proxy.ts` runs `clerkMiddleware()` so those guards can read the session; it does not decide access itself.
+8. Local development only: with `ATLAS_DEV_AUTH_BYPASS=1` and `NODE_ENV` other than `production`, both guards return a fixed `dev@local` session, Clerk is skipped entirely and no keys are needed.
+
+The CLI and admin API keep their own `ATLAS_CLI_ADMIN_TOKEN` bearer token and do not use Clerk.
 
 ### 5.2 Create a file
 
@@ -131,7 +132,7 @@ References are optional but recommended. The selected source and references rema
 ### 5.6 Reference Catalog
 
 - The UI browses, searches and filters references. Any signed-in user can also add, edit and delete references and add categories there (VAR-29, which supersedes the earlier browse-only rule).
-- **Add reference** opens a form with an image drop zone that previews the image, a label, category chips and tag chips. It uses the same upload service, content-type check (`image/*`) and 12 MB limit as the CLI-admin upload, and records the session's device as `created_by`.
+- **Add reference** opens a form with an image drop zone that previews the image, a label, category chips and tag chips. It uses the same upload service, content-type check (`image/*`) and 12 MB limit as the CLI-admin upload, and records the signed-in user's email as `created_by`.
 - **New category** in the category chips takes a name only. The new category is created when the reference is saved, so a cancelled form leaves no empty category. Atlas derives the slug from the name, appends the category after the last one, and reuses an existing category with the same slug.
 - Each card has an edit action. It opens the same form, filled in, and can change the label, category, tags and image. A replacement image gets a new storage key; the old object is removed after the row points at the new one.
 - Each card has a delete action. A confirm dialog names the reference. Delete is a hard delete: the `reference_images` row and the stored object at `storage_key` are both removed.
@@ -236,16 +237,10 @@ The current `sql.js` database is owned by the Atlas process and persisted as a w
 
 Exact internal filenames may vary, but the behavior below is required. All mutations validate input with shared schemas and return structured JSON errors.
 
-### Device auth
+### Sign-in
 
-- `POST /api/device/enrollments` -> submit device name, client instance ID, and public key; return enrollment ID, proof challenge, expiry, short code, fingerprint.
-- `POST /api/device/enrollments/:id/prove` -> consume possession signature.
-- `GET /api/device/enrollments/:id` -> polling status with a uniform pending/approved/denied/expired shape.
-- `POST /api/device/enrollments/:id/pin` -> after approval and fresh key proof, set/confirm the first PIN.
-- `POST /api/device/challenges` -> issue a one-use unlock challenge without leaking whether a device ID is valid.
-- `POST /api/device/verify` -> consume challenge, verify signature and PIN, issue session.
-- `POST /api/device/logout` -> revoke current session.
-- CLI-admin endpoints: approve enrollment, list devices, reset PIN, and revoke device.
+- Sign-in, sign-out and session handling are Clerk's (see 5.1). Atlas exposes no auth endpoints of its own.
+- Every browser-facing API route answers 401 when signed out and 403 `not_authorised` for an account off the allowlist.
 
 ### Files and assets
 
@@ -335,7 +330,6 @@ Provide an `atlas` CLI that talks to the running Atlas HTTP API using an admin b
 - `atlas assets edit <id> --label ... --room ... --tags ... --clock ...`
 - `atlas references categories list|create|rename`
 - `atlas references list|search|get|upload|edit|delete`
-- `atlas devices list|approve|reset-pin|revoke`
 
 ### Output modes
 
@@ -354,17 +348,9 @@ Provide an `atlas` CLI that talks to the running Atlas HTTP API using an admin b
 ## 13. Security requirements
 
 - Public deployment is allowed only over HTTPS.
-- Private keys never leave the device and are never logged.
-- Store the device private key encrypted in IndexedDB using a device-local, non-extractable Web Crypto wrapping key. This is origin-bound browser storage, not hardware-backed identity.
-- Validate and normalize submitted OpenPGP public keys server-side and compute the fingerprint server-side.
-- Enrollment approval binds the exact enrollment ID and full fingerprint even though the human types a short code.
-- Challenges are random, purpose/audience/origin bound, expire quickly, and are consumed exactly once even on failed verification.
-- PINs are hashed with Node's `scrypt` and a per-device random salt. Never log a PIN or return its hash.
-- Rate-limit enrollment, challenge, verify, PIN set/reset, and CLI-admin auth. The UI must receive remaining-attempt and retry-time information without exposing sensitive device existence.
-- Baseline policy: five failed PIN attempts in ten minutes causes a five-minute device lock. A successful unlock resets the counter.
-- Reset PIN revokes every active session for that device. Revoke device also invalidates outstanding challenges.
-- Session cookies are HTTP-only, secure in production, same-site, and backed by revocable server session records.
-- Apply a restrictive CSP and do not run analytics/session replay on enrollment or unlock pages.
+- Browser access requires a Clerk session whose verified primary email is in `ATLAS_ALLOWED_EMAILS`. Clerk keys live only in `.env`.
+- Rate-limit CLI-admin auth.
+- Apply a restrictive CSP that allows only the Clerk hosts sign-in needs, and do not run analytics/session replay on the sign-in page.
 
 This is a deliberately smaller product slice than the full PGPAuth design. WebAuthn PRF protectors, recovery credentials, multiple subjects, and multi-tenant identity are deferred.
 

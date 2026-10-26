@@ -5,7 +5,7 @@ const envSchema = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   DATABASE_PATH: z.string().min(1).default("data/atlas.sqlite"),
-  ATLAS_SESSION_COOKIE: z.string().min(1).default("atlas_device_session"),
+  ATLAS_ALLOWED_EMAILS: z.string().default(""),
   ATLAS_CLI_ADMIN_TOKEN: z.string().optional(),
   ATLAS_DEV_AUTH_BYPASS: z
     .string()
@@ -30,6 +30,6 @@ export function isProduction() {
 
 if (env.ATLAS_DEV_AUTH_BYPASS && isProduction()) {
   console.warn(
-    "ATLAS_DEV_AUTH_BYPASS is set in production. Ignoring it: device login stays on."
+    "ATLAS_DEV_AUTH_BYPASS is set in production. Ignoring it: Clerk sign-in stays on."
   );
 }
