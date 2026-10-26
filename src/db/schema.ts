@@ -91,84 +91,6 @@ export const pipelineRuns = sqliteTable("pipeline_runs", {
   finishedAt: integer("finished_at"),
 });
 
-export const deviceEnrollments = sqliteTable(
-  "device_enrollments",
-  {
-    id: text("id").primaryKey(),
-    code: text("code").notNull(),
-    clientInstanceId: text("client_instance_id").notNull(),
-    deviceName: text("device_name").notNull(),
-    publicKey: text("public_key").notNull(),
-    fingerprint: text("fingerprint").notNull(),
-    proofPayload: text("proof_payload").notNull(),
-    proofVerifiedAt: integer("proof_verified_at"),
-    status: text("status").notNull(),
-    approvedDeviceId: text("approved_device_id"),
-    expiresAt: integer("expires_at").notNull(),
-    createdAt: integer("created_at").notNull(),
-    updatedAt: integer("updated_at").notNull(),
-  },
-  (table) => [
-    uniqueIndex("device_enrollments_code_unique").on(table.code),
-    index("device_enrollments_fingerprint_idx").on(table.fingerprint),
-  ]
-);
-
-export const devices = sqliteTable(
-  "devices",
-  {
-    id: text("id").primaryKey(),
-    deviceName: text("device_name").notNull(),
-    publicKey: text("public_key").notNull(),
-    fingerprint: text("fingerprint").notNull(),
-    status: text("status").notNull(),
-    pinHash: text("pin_hash"),
-    pinSalt: text("pin_salt"),
-    pinResetRequired: integer("pin_reset_required", { mode: "boolean" })
-      .notNull()
-      .default(true),
-    failedAttemptCount: integer("failed_attempt_count").notNull().default(0),
-    firstFailedAt: integer("first_failed_at"),
-    lockedUntil: integer("locked_until"),
-    createdAt: integer("created_at").notNull(),
-    updatedAt: integer("updated_at").notNull(),
-  },
-  (table) => [uniqueIndex("devices_fingerprint_unique").on(table.fingerprint)]
-);
-
-export const authChallenges = sqliteTable(
-  "auth_challenges",
-  {
-    id: text("id").primaryKey(),
-    deviceId: text("device_id"),
-    purpose: text("purpose").notNull(),
-    canonicalPayload: text("canonical_payload").notNull(),
-    expiresAt: integer("expires_at").notNull(),
-    consumedAt: integer("consumed_at"),
-    createdAt: integer("created_at").notNull(),
-  },
-  (table) => [index("auth_challenges_device_idx").on(table.deviceId)]
-);
-
-export const deviceSessions = sqliteTable(
-  "device_sessions",
-  {
-    id: text("id").primaryKey(),
-    tokenHash: text("token_hash").notNull(),
-    deviceId: text("device_id")
-      .notNull()
-      .references(() => devices.id, { onDelete: "cascade" }),
-    lastActivityAt: integer("last_activity_at").notNull(),
-    expiresAt: integer("expires_at").notNull(),
-    revokedAt: integer("revoked_at"),
-    createdAt: integer("created_at").notNull(),
-  },
-  (table) => [
-    uniqueIndex("device_sessions_token_hash_unique").on(table.tokenHash),
-    index("device_sessions_device_idx").on(table.deviceId),
-  ]
-);
-
 export const referenceCategories = sqliteTable(
   "reference_categories",
   {
@@ -316,10 +238,6 @@ export type PrimaryContactRow = typeof primaryContacts.$inferSelect;
 export type FileNoteRow = typeof fileNotes.$inferSelect;
 export type FileAssetRow = typeof fileAssets.$inferSelect;
 export type PipelineRunRow = typeof pipelineRuns.$inferSelect;
-export type DeviceEnrollmentRow = typeof deviceEnrollments.$inferSelect;
-export type DeviceRow = typeof devices.$inferSelect;
-export type AuthChallengeRow = typeof authChallenges.$inferSelect;
-export type DeviceSessionRow = typeof deviceSessions.$inferSelect;
 export type ReferenceCategoryRow = typeof referenceCategories.$inferSelect;
 export type ReferenceImageRow = typeof referenceImages.$inferSelect;
 export type AtlasImageSessionRow = typeof atlasImageSessions.$inferSelect;

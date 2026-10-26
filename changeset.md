@@ -1,74 +1,108 @@
-[FEATURE]: Skip device login locally only when ATLAS_DEV_AUTH_BYPASS is set
-# v0.5.0 | Focus: Device login
+[FEATURE]: Sign in to Atlas with Google through Clerk, allowlisted emails only
+# v0.6.0 | Focus: Sign-in
 
 -------------------------------- ✦ DETAILS ✦ --------------------------------
 
 ## TASKS
 -----------------------------------------------------------------------------
-1. Add the ATLAS_DEV_AUTH_BYPASS flag to the env schema and its name to
-   .env.example. The values 1 and true turn it on.
+1. Rebuild requireAuth() and getAuthenticatedSession() on Clerk
+   currentUser() and keep their call sites unchanged.
 
-2. Return a fixed dev@local session from getAuthenticatedSession() and
-   requireAuth() when the flag is set and NODE_ENV is not production.
+2. Allow only a verified primary email listed in ATLAS_ALLOWED_EMAILS.
 
-3. Answer the activity ping for the dev session too, so the client does
-   not bounce to /login.
+3. Send signed-out pages to /sign-in and outside accounts to
+   /not-authorised. API routes answer 401 signed out and 403 outside.
 
-4. Log a warning at startup when the flag is set in production, and
-   keep device login on.
+4. Add src/proxy.ts with clerkMiddleware(), ClerkProvider in the root
+   layout, a Clerk sign-in page and a Clerk sign-out button.
 
-5. Show a "Dev mode, login skipped" badge in the app shell header while
-   the bypass is on.
+5. Skip Clerk entirely when ATLAS_DEV_AUTH_BYPASS is active.
 
-6. Add unit tests for the flag in development, without the flag, and in
-   production.
+6. Delete the device enrollment, PIN, session cookie and activity code,
+   the /api/device routes, the admin device routes and atlas devices.
+
+7. Drop the device_enrollments, devices, auth_challenges and
+   device_sessions tables on database start.
+
+8. Allow the Clerk Development hosts in the CSP.
+
+9. Rewrite FINAL-SPEC.md section 5.1 for Clerk sign-in.
+
+10. Add tests for the allowlist, the 401 and 403 answers, the page
+    redirects and the dev bypass.
 
 
 
 ## DESCRIPTION
 -----------------------------------------------------------------------------
-Under next dev, Atlas let every request through with no way to turn it
-off. Testing the real login locally was not possible, and the screen gave
-no sign that login was skipped.
+Atlas used OpenPGP device enrollment, a CLI approval, a PIN and its own
+session cookie. Megan and Wayne need a normal sign-in instead.
 
-The skip is now opt-in. Set ATLAS_DEV_AUTH_BYPASS=1 to work without a
-device and PIN. Without the flag, next dev asks for the device login
-again. Production ignores the flag. The bypass lives inside the two guard
-functions, so no page or API route changes, and the Clerk work in VAR-27
-can keep it. requireCliAdmin() still needs the bearer token.
+Atlas now signs people in with Google through the existing Clerk
+Development instance of the AAKB Atlas application. Clerk proves who the
+person is. Atlas then lets in only a verified primary email on the
+ATLAS_ALLOWED_EMAILS list. Any other Google account sees a "Not
+authorised" page with a sign-out button, and the API refuses it.
+
+The old login is gone, not hidden. Its routes return 404, nothing reads
+the atlas_device_session cookie, and its tables are dropped. Old device
+sessions therefore stop working at the first request after deploy.
+
+The two guard functions keep their names and return a session or null,
+so the page and API call sites, about 40, did not change. The CLI keeps its
+ATLAS_CLI_ADMIN_TOKEN bearer token.
 
 
 
 
 ## TECHNICAL NOTES
 -----------------------------------------------------------------------------
-- src/services/auth/dev-bypass.ts holds isDevAuthBypassActive() and
-  DEV_SESSION. DEV_SESSION has the same shape as a findActiveSession()
-  row, with device name dev@local.
+- src/services/auth/access.ts holds resolveAccess() and
+  parseAllowedEmails(). They are pure functions, so tests need no Clerk.
 
-- src/services/auth/session.ts checks the bypass first in
-  getAuthenticatedSession(), requireAuth() and touchCurrentSession(). The
-  bypass skips the cookie and database lookup. The old NODE_ENV
-  development fallback is gone.
+- src/services/auth/session.ts: getAccess() returns signed_out,
+  not_authorised or allowed. getAuthenticatedSession() throws
+  ApiError(403) for not_authorised. Every caller is inside
+  withApiErrors(), so the throw becomes a 403 response.
 
-- src/services/env.ts parses the flag to a boolean and warns once when
-  it is set with NODE_ENV production.
+- The session shape is now { userId, email }. DEV_SESSION is
+  { userId: "dev-local", email: "dev@local" }.
 
-- src/components/app-shell.tsx renders the badge. AppShell is a server
-  component, so the flag never reaches the client bundle.
+- Next 16 renames middleware to proxy, per
+  node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md.
+  The proxy only attaches Clerk state. The guards decide access.
 
-- tests/dev-auth-bypass.test.ts covers the three flag cases and the dev
-  session shape.
+- Under the dev bypass the proxy skips clerkMiddleware() and the layout
+  skips ClerkProvider, so local runs need no Clerk keys. The
+  ClerkEnabled context hides the sign-out button in that mode, because
+  file-ui.tsx also loads in client components and cannot read env.
 
-- Gate: bun run lint passes. bun test: 28 pass, 2 fail. bun run
-  typecheck: 5 errors, all "Cannot find module bun:test" in tests/. The
-  same failures exist on master: 4 type errors, the same 2 tests. Both
-  failing milestone1 tests pass when run alone. INFERRED: another test
-  file loads src/services/env.ts before milestone1 sets process.env.
+- Migration: the repo has no drizzle-kit migration history. Its schema
+  lives in ensureDatabase() in src/db/client.ts, so the DROP TABLE IF
+  EXISTS statements live there too. The four tables are dropped, not
+  frozen.
 
-- UNVERIFIED: the dev server was not run. The badge and the bypass on
-  pages and /api/files/** and /api/references/** routes were not checked
-  in a browser.
+- next.config.ts: CSP adds https://*.clerk.accounts.dev,
+  challenges.cloudflare.com, *.protect.clerk.com and clerk-telemetry.
+  /login redirects to /sign-in.
+
+- env: ATLAS_SESSION_COOKIE is removed and ATLAS_ALLOWED_EMAILS is
+  added. .env.example lists NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+  CLERK_SECRET_KEY, NEXT_PUBLIC_CLERK_SIGN_IN_URL and
+  ATLAS_ALLOWED_EMAILS.
+
+- Dependencies: add @clerk/nextjs 7.9.20, remove openpgp.
+
+- Gate: bun test 32 pass, 2 fail. Both failures are the known Milestone
+  1 tests on master. typecheck shows only "Cannot find module bun:test",
+  now 6 instead of 5 because of the new test file. lint is clean.
+
+- UNVERIFIED: Google sign-in end to end, locally and on
+  atlas.allaboutkitchens.nz. .env has no Clerk keys yet and the
+  allowlist emails are not set. bun run build was not run.
+
+- INFERRED: the Development Frontend API host matches
+  *.clerk.accounts.dev.
 
 
 -----------------------------------------------------------------------------

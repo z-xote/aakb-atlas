@@ -1,9 +1,0 @@
-"use server";
-
-import { redirect } from "next/navigation";
-import { clearAuthSession } from "@/services/auth/session";
-
-export async function logoutAction() {
-  await clearAuthSession();
-  redirect("/login");
-}

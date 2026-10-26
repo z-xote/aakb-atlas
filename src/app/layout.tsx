@@ -1,7 +1,9 @@
+import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { DM_Sans, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
-import { SessionActivity } from "@/features/auth/session-activity";
+import { ClerkEnabled } from "@/features/auth/sign-out-button";
+import { isDevAuthBypassActive } from "@/services/auth/dev-bypass";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -26,7 +28,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
+  const clerkEnabled = !isDevAuthBypassActive();
+  const page = (
     <html
       lang="en"
       className={`${dmSans.variable} ${jetBrainsMono.variable} h-full antialiased`}
@@ -48,10 +51,12 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
-        <SessionActivity />
-        {children}
+        <ClerkEnabled value={clerkEnabled}>{children}</ClerkEnabled>
         <Toaster />
       </body>
     </html>
   );
+
+  // The dev bypass runs without Clerk keys, so it skips the provider.
+  return clerkEnabled ? <ClerkProvider>{page}</ClerkProvider> : page;
 }

@@ -59,28 +59,6 @@ function print(data: unknown, compact: () => void) {
   else compact();
 }
 
-async function devicesCommand() {
-  const action = args[1];
-  if (action === "list") {
-    const rows = await request<Array<{ id: string; name: string; fingerprint: string; status: string; pinResetRequired: boolean }>>("/api/admin/devices");
-    print(rows, () => rows.forEach((row) => console.log(`${row.id}\t${row.status}\t${row.name}\t${row.fingerprint.slice(-16)}${row.pinResetRequired ? "\tPIN RESET" : ""}`)));
-    return;
-  }
-  const value = args[2];
-  if (!value) fail(`devices ${action ?? "<action>"} requires a code or device ID.`, 3);
-  if (action === "approve") {
-    const row = await request<{ deviceId: string; deviceName: string; fingerprint: string }>(`/api/admin/device-enrollments/${encodeURIComponent(value)}/approve`, { method: "POST" });
-    print(row, () => console.log(`Approved ${row.deviceName} (${row.deviceId})\nFingerprint ${row.fingerprint}`));
-    return;
-  }
-  if (action === "reset-pin" || action === "revoke") {
-    const row = await request<Record<string, unknown>>(`/api/admin/devices/${encodeURIComponent(value)}/${action}`, { method: "POST" });
-    print(row, () => console.log(action === "reset-pin" ? `PIN reset requested for ${value}; active sessions revoked.` : `Revoked ${value}; sessions and challenges invalidated.`));
-    return;
-  }
-  fail("Use: atlas devices list|approve|reset-pin|revoke", 3);
-}
-
 async function referenceCategoriesCommand() {
   const action = args[2];
   if (action === "list") {
@@ -151,9 +129,8 @@ async function referencesCommand() {
 }
 
 async function main() {
-  if (args[0] === "devices") return devicesCommand();
   if (args[0] === "references") return referencesCommand();
-  fail("Use: atlas devices ... | atlas references ...", 3);
+  fail("Use: atlas references ...", 3);
 }
 
 await main();

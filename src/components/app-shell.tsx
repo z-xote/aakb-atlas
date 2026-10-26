@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { ArrowLeftIcon, FolderKanbanIcon, LogOutIcon, PlusIcon } from "lucide-react";
+import { ArrowLeftIcon, FolderKanbanIcon, PlusIcon } from "lucide-react";
 
 import { ThemeMenu } from "@/features/files/components/theme-menu";
-import { logoutAction } from "@/services/auth/actions";
+import { AtlasSignOutButton } from "@/features/auth/sign-out-button";
 import { isDevAuthBypassActive } from "@/services/auth/dev-bypass";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -65,12 +65,7 @@ export function AppShell({
               </Link>
             ) : null}
             <ThemeMenu />
-            <form action={logoutAction}>
-              <button className="atlas-signout-button" type="submit">
-                <LogOutIcon />
-                <span>Sign out</span>
-              </button>
-            </form>
+            <AtlasSignOutButton />
           </div>
         </div>
       </header>

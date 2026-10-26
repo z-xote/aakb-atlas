@@ -16,9 +16,7 @@ describe("Dev login bypass", () => {
     expect(isDevAuthBypassActive({ NODE_ENV: "production", ATLAS_DEV_AUTH_BYPASS: false })).toBe(false);
   });
 
-  test("returns a fixed active session for the dev@local actor", () => {
-    expect(DEV_SESSION.device.deviceName).toBe("dev@local");
-    expect(DEV_SESSION.device.status).toBe("active");
-    expect(DEV_SESSION.session.deviceId).toBe(DEV_SESSION.device.id);
+  test("returns a fixed session for the dev@local actor", () => {
+    expect(DEV_SESSION).toEqual({ userId: "dev-local", email: "dev@local" });
   });
 });
