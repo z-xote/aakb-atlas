@@ -52,13 +52,13 @@ export function ReferenceCatalog({
       {filtered.length === 0 ? (
         <div className="atlas-file-tile atlas-empty-tile"><strong>No references found</strong><span className="atlas-muted">Try another category, label, or tag.</span></div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
           {filtered.map((image) => (
-            <article className="overflow-hidden border" key={image.id} style={{ borderColor: "var(--atlas-border)", borderRadius: "var(--atlas-radius)", background: "var(--atlas-bg-surface)" }}>
+            <article className="min-w-0 overflow-hidden border" key={image.id} style={{ borderColor: "var(--atlas-border)", borderRadius: "var(--atlas-radius)", background: "var(--atlas-bg-surface)" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt={image.label} className="aspect-[4/3] w-full object-cover" src={image.url} />
+              <img alt={image.label} className="aspect-4/3 w-full object-contain" src={image.url} style={{ background: "var(--atlas-bg-muted)" }} />
               <div className="p-3">
-                <strong className="block text-sm">{image.label}</strong>
+                <strong className="block break-words text-sm">{image.label}</strong>
                 <span className="atlas-muted mt-1 block text-xs">{image.categoryLabel}</span>
                 {image.tags.length ? <div className="mt-2 flex flex-wrap gap-1">{image.tags.map((tag) => <span className="rounded-full border px-2 py-0.5 text-[11px]" key={tag}>{tag}</span>)}</div> : null}
               </div>
