@@ -66,7 +66,9 @@ ATLAS_CLI_ADMIN_TOKEN bearer token.
   withApiErrors(), so the throw becomes a 403 response.
 
 - The session shape is now { userId, email }. DEV_SESSION is
-  { userId: "dev-local", email: "dev@local" }.
+  { userId: "dev-local", email: "dev@local" }. sessionActor() in
+  src/features/references/actor.ts, from VAR-29, now stores the email
+  as reference_images.created_by instead of device:<id>.
 
 - Next 16 renames middleware to proxy, per
   node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md.
@@ -93,9 +95,9 @@ ATLAS_CLI_ADMIN_TOKEN bearer token.
 
 - Dependencies: add @clerk/nextjs 7.9.20, remove openpgp.
 
-- Gate after merging master at 72678e3: bun test 33 pass, 2 fail. Both
+- Gate after merging master at 59816fe: bun test 54 pass, 2 fail. Both
   failures are the known Milestone 1 tests on master. typecheck shows
-  only "Cannot find module bun:test", 7 times, one per test file. lint is
+  only "Cannot find module bun:test", 8 times, one per test file. lint is
   clean.
 
 - UNVERIFIED: Google sign-in end to end, locally and on

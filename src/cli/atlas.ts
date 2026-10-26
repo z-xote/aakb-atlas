@@ -35,6 +35,20 @@ function imageContentType(filename: string) {
   } as Record<string, string>)[extension ?? ""] ?? "application/octet-stream";
 }
 
+async function imageBlob(filename: string) {
+  let fileBytes: Uint8Array;
+  try {
+    fileBytes = new Uint8Array(await readFile(filename));
+  } catch {
+    fail(`file not found: ${filename}`, 3);
+  }
+  const fileBuffer = fileBytes.buffer.slice(
+    fileBytes.byteOffset,
+    fileBytes.byteOffset + fileBytes.byteLength
+  ) as ArrayBuffer;
+  return new Blob([fileBuffer], { type: imageContentType(filename) });
+}
+
 async function request<T>(path: string, init?: RequestInit) {
   if (!token) fail("ATLAS_CLI_ADMIN_TOKEN is not set.", 2);
   let response: Response;
@@ -67,18 +81,31 @@ async function referenceCategoriesCommand() {
     return;
   }
   if (action === "create") {
-    const slug = args[3];
+    const slug = args[3]?.startsWith("--") ? undefined : args[3];
     const label = option("--label");
-    if (!slug || !label) fail("Use: atlas references categories create <slug> --label <label> [--sort <number>]", 3);
-    const row = await request<Record<string, unknown>>("/api/admin/references/categories", {
+    if (!label) fail("Use: atlas references categories create [<slug>] --label <label> [--sort <number>]", 3);
+    const sort = option("--sort");
+    const row = await request<{ slug: string; label: string }>("/api/admin/references/categories", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ slug, label, sortOrder: Number(option("--sort") ?? 0) }),
+      body: JSON.stringify({ slug, label, sortOrder: sort === undefined ? undefined : Number(sort) }),
     });
-    print(row, () => console.log(`Created reference category ${slug} (${label}).`));
+    print(row, () => console.log(`Created reference category ${row.slug} (${row.label}).`));
     return;
   }
-  fail("Use: atlas references categories list|create", 3);
+  if (action === "rename") {
+    const slug = args[3];
+    const label = option("--label");
+    if (!slug || slug.startsWith("--") || !label) fail("Use: atlas references categories rename <slug> --label <label>", 3);
+    const row = await request<{ slug: string; label: string }>(`/api/admin/references/categories/${encodeURIComponent(slug)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ label }),
+    });
+    print(row, () => console.log(`Renamed ${slug} to ${row.label} (${row.slug}).`));
+    return;
+  }
+  fail("Use: atlas references categories list|create|rename", 3);
 }
 
 async function referencesCommand() {
@@ -101,31 +128,40 @@ async function referencesCommand() {
     print(row, () => console.log(`${row.id}\n${row.label}\nCategory: ${row.categorySlug}\nTags: ${row.tags.join(", ")}\nURL: ${row.url}`));
     return;
   }
+  if (action === "delete") {
+    const id = args[2];
+    if (!id) fail("references delete requires an ID.", 3);
+    const row = await request<{ id: string; label: string; storageRemoved: boolean; categoryRemoved: boolean }>(`/api/admin/references/${encodeURIComponent(id)}`, { method: "DELETE" });
+    print(row, () => console.log(`Deleted ${row.label} (${row.id}).${row.categoryRemoved ? "\nIts category had no references left and was removed." : ""}${row.storageRemoved ? "" : "\nThe stored image could not be removed; check the server log."}`));
+    return;
+  }
+  if (action === "edit") {
+    const id = args[2];
+    const image = option("--image");
+    const fields = (["--label", "--category", "--tags"] as const).filter((name) => option(name) !== undefined);
+    if (!id || (!fields.length && !image)) fail("Use: atlas references edit <id> [--label <label>] [--category <slug>] [--tags a,b] [--image <file>]", 3);
+    const form = new FormData();
+    for (const name of fields) form.set(name.slice(2), option(name)!);
+    if (image) form.set("image", await imageBlob(image), image.split(/[\\/]/).pop());
+    const row = await request<{ id: string; label: string; categorySlug: string; tags: string[]; url: string; categoryRemoved: boolean }>(`/api/admin/references/${encodeURIComponent(id)}`, { method: "PATCH", body: form });
+    print(row, () => console.log(`Updated ${row.label} (${row.id}) in ${row.categorySlug}.\nTags: ${row.tags.join(", ")}\n${row.url}${row.categoryRemoved ? "\nThe old category had no references left and was removed." : ""}`));
+    return;
+  }
   if (action === "upload") {
     const filename = args[2];
     const category = option("--category");
     const label = option("--label");
     if (!filename || !category || !label) fail("Use: atlas references upload <file> --category <slug> --label <label> [--tags a,b]", 3);
-    let fileBytes: Uint8Array;
-    try {
-      fileBytes = new Uint8Array(await readFile(filename));
-    } catch {
-      fail(`file not found: ${filename}`, 3);
-    }
     const form = new FormData();
     form.set("category", category);
     form.set("label", label);
     form.set("tags", option("--tags") ?? "");
-    const fileBuffer = fileBytes.buffer.slice(
-      fileBytes.byteOffset,
-      fileBytes.byteOffset + fileBytes.byteLength
-    ) as ArrayBuffer;
-    form.set("image", new Blob([fileBuffer], { type: imageContentType(filename) }), filename.split(/[\\/]/).pop());
+    form.set("image", await imageBlob(filename), filename.split(/[\\/]/).pop());
     const row = await request<{ id: string; label: string; categorySlug: string; url: string }>("/api/admin/references/upload", { method: "POST", body: form });
     print(row, () => console.log(`Uploaded ${row.label} (${row.id}) to ${row.categorySlug}.\n${row.url}`));
     return;
   }
-  fail("Use: atlas references list|search|get|upload|categories", 3);
+  fail("Use: atlas references list|search|get|upload|edit|delete|categories", 3);
 }
 
 async function main() {

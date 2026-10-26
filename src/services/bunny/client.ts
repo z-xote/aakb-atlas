@@ -57,6 +57,28 @@ export async function uploadStoredObject(input: {
   };
 }
 
+// Missing objects count as removed so a retried delete stays idempotent.
+export async function deleteStoredObject(storageKey: string) {
+  const env = getBunnyEnv();
+
+  if (env.driver === "local") {
+    await fs.rm(path.join(process.cwd(), "public", "uploads", "atlas-storage", storageKey), { force: true });
+    return;
+  }
+
+  if (!env.configured || !env.storageZone || !env.accessKey) {
+    throw new ApiError(503, "bunny_not_configured", "Bunny storage is not configured on the Atlas server.");
+  }
+  const target = `${env.storageEndpoint}/${encodeURIComponent(env.storageZone)}/${encodeObjectPath(storageKey)}`;
+  const response = await fetch(target, { method: "DELETE", headers: { AccessKey: env.accessKey } });
+  if (!response.ok && response.status !== 404) {
+    throw new ApiError(502, "bunny_delete_failed", "Bunny did not delete the stored object.", {
+      status: response.status,
+      storageKey,
+    });
+  }
+}
+
 export function createBunnyUploadSlot(input: { fileId: string; filename: string }) {
   const env = getBunnyEnv();
   const safeName = input.filename.replace(/[^a-zA-Z0-9._-]/g, "-");

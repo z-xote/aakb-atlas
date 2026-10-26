@@ -1,5 +1,7 @@
 import { ApiError, apiSuccess, withApiErrors } from "@/services/api/response";
-import { listReferenceCatalog } from "@/features/references/data";
+import { sessionActor } from "@/features/references/actor";
+import { listReferenceCatalog, uploadReferenceImage } from "@/features/references/data";
+import { readReferenceUploadForm } from "@/features/references/schemas";
 import { getAuthenticatedSession } from "@/services/auth/session";
 
 export async function GET(request: Request) {
@@ -14,5 +16,15 @@ export async function GET(request: Request) {
       (!query || [image.label, image.categoryLabel, ...image.tags].join(" ").toLowerCase().includes(query))
     );
     return apiSuccess({ categories: catalog.categories, images });
+  });
+}
+
+export async function POST(request: Request) {
+  return withApiErrors(async () => {
+    const session = await getAuthenticatedSession();
+    if (!session) throw new ApiError(401, "unauthorized", "Unlock Atlas to add references.");
+    const upload = await readReferenceUploadForm(await request.formData());
+    const result = await uploadReferenceImage({ ...upload, createdBy: sessionActor(session) });
+    return apiSuccess(result, { status: 201 });
   });
 }
