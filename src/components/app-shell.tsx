@@ -3,6 +3,7 @@ import { ArrowLeftIcon, FolderKanbanIcon, LogOutIcon, PlusIcon } from "lucide-re
 
 import { ThemeMenu } from "@/features/files/components/theme-menu";
 import { logoutAction } from "@/services/auth/actions";
+import { isDevAuthBypassActive } from "@/services/auth/dev-bypass";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +50,11 @@ export function AppShell({
           </Link>
 
           <div className="ml-auto flex items-center gap-2">
+            {isDevAuthBypassActive() ? (
+              <span className="rounded-md border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                Dev mode, login skipped
+              </span>
+            ) : null}
             {actionHref && actionLabel ? (
               <Link
                 href={actionHref}
