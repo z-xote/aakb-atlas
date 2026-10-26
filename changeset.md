@@ -11,6 +11,9 @@
 
 2. Record why the service starts Next with -H localhost.
 
+3. Record the nginx https redirect, the forwarded scheme and the 180 s
+   proxy timeouts.
+
 
 
 ## DESCRIPTION
@@ -26,6 +29,10 @@ It also records a v0.8.0 deploy finding. With Next bound to 127.0.0.1,
 Clerk's middleware rewrite to localhost made Next proxy each request to
 itself until it timed out with a 500. The server now starts Next with
 -H localhost through a unit override.
+
+nginx now sends visitors on http to https and tells Next the scheme is
+https. Image generation failed on the http address, and Clerk had been
+sending people back to it after sign-in.
 
 
 

@@ -26,6 +26,24 @@ host, so nothing listens publicly.
 
 The other Next server on port 3001 is the AAKB website, not Atlas.
 
+## nginx
+
+cloudflared reaches nginx over plain http, so nginx's `$scheme` is always
+`http`. Cloudflare's own `X-Forwarded-Proto` header carries the visitor's
+real scheme. The site config uses it to:
+
+- answer `301` to `https://` when that header is `http`. Atlas must run on
+  https: `crypto.randomUUID()` only exists on secure pages, and Clerk
+  sends users back to the scheme it was given;
+- forward `X-Forwarded-Proto https` to Next;
+- allow 180 s for `proxy_read_timeout` and `proxy_send_timeout`, because
+  image generation runs inside the request. Cloudflare still cuts a
+  request at about 100 s.
+
+Requests made on the host without that header, such as `curl` to
+`127.0.0.1`, are not redirected. Test a config change with
+`sudo nginx -t` before `sudo systemctl reload nginx`.
+
 ## Release
 
 Replace `vX.Y.Z` with the tag.
