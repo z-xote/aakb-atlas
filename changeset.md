@@ -1,52 +1,68 @@
-[DOCS]: Write down how Atlas reaches production and how to roll back
+[FIX]: Stop Generate and Retry hanging on a spinner that never ends
 
-# v0.8.1 | Focus: Repository
+# v0.9.0 | Focus: Atlas image workspace
 
 -------------------------------- ✦ DETAILS ✦ --------------------------------
 
 ## TASKS
 -----------------------------------------------------------------------------
-1. Add docs/deploy.md with the production layout, release steps, checks
-   and rollback.
+1. Add createClientRequestId(), which falls back to getRandomValues()
+   when crypto.randomUUID is missing.
 
-2. Record why the service starts Next with -H localhost.
+2. Wrap generate() in the workspace in try/catch and read the response
+   with readGenerationResponse(), which returns null for non-JSON pages.
 
-3. Record the nginx https redirect, the forwarded scheme and the 180 s
-   proxy timeouts.
+3. Show the server's error, a timeout note for 502, 504 and 524, or the
+   HTTP status, and clear the progress screen on every failure.
+
+4. Give the Retry button a busy state and show failures in a toast.
+
+5. Add tests for the request id fallback and the failure messages.
 
 
 
 ## DESCRIPTION
 -----------------------------------------------------------------------------
-Atlas had no deploy docs. Each release meant finding the host, service
-and app folder again. v0.8.0 was deployed this way on 26 October 2026.
+After pressing Generate, the progress screen stayed up for good and no
+image arrived. Nothing showed in history.
 
-The page lists the EC2 host, the systemd unit, the nginx and Cloudflare
-route, the database and backup folders, and the commands for a release
-and a rollback. It holds no secrets.
+On the plain-http address, crypto.randomUUID() does not exist, so
+generate() threw before it sent the request. It had no error handling, so
+the progress screen never cleared. Retry had the same call.
 
-It also records a v0.8.0 deploy finding. With Next bound to 127.0.0.1,
-Clerk's middleware rewrite to localhost made Next proxy each request to
-itself until it timed out with a 500. The server now starts Next with
--H localhost through a unit override.
+The id now comes from getRandomValues(), which works on any page. Any
+failure now clears the screen and says what went wrong. A proxy timeout
+returns an HTML page instead of JSON. That case now says the image may
+still finish, because the server keeps generating after the proxy gives
+up.
 
-nginx now sends visitors on http to https and tells Next the scheme is
-https. Image generation failed on the http address, and Clerk had been
-sending people back to it after sign-in.
+This does not move generation out of the request. A high-quality run can
+still pass Cloudflare's 100-second limit. That needs background
+generation and is left for its own change.
 
 
 
 ## TECHNICAL NOTES
 -----------------------------------------------------------------------------
-- New file: docs/deploy.md. No code changes.
+- New: src/features/atlas-image/client-request.ts and
+  tests/atlas-image-client-request.test.ts.
 
-- Server override, outside git:
-  /etc/systemd/system/aakb-atlas.service.d/override.conf.
+- Changed: workspace.tsx generate() and RetryGenerationButton in
+  generation-actions.tsx.
 
-- The public URL is https://atlas-aakb.nicourt.com.
-  atlas.allaboutkitchens.nz does not resolve in DNS.
+- Production evidence, 26 October 2026: nginx logged the session and
+  direction POSTs but no POST to /atlas-image/generations. The database
+  has no generation row from that day.
 
-- The rollback steps were not run. UNVERIFIED.
+- Server change outside git: nginx now redirects visitors on http to
+  https and forwards X-Forwarded-Proto https. proxy_read_timeout and
+  proxy_send_timeout are 180s.
+
+- bun test: 61 pass, 2 fail. The same 2 tests fail on master (CLI
+  bearer auth, Bunny upload). typecheck: only the existing bun:test
+  type errors, which master has too.
+
+- Not checked in a browser. UNVERIFIED.
 
 
 -----------------------------------------------------------------------------
