@@ -61,7 +61,7 @@ The existing production navigation shell is part of Atlas's identity and is not 
 
 ### 5.1 Sign in with Clerk
 
-Clerk replaced device enrollment and the PIN in v0.7.0 (VAR-27). Device, PIN and session-cookie text elsewhere in this spec is historical.
+Clerk replaced device enrollment and the PIN in v0.8.0 (VAR-27). Device, PIN and session-cookie text elsewhere in this spec is historical.
 
 1. Atlas uses the existing Clerk Development instance of the AAKB Atlas application. Google is the only sign-in method.
 2. A signed-out visitor to any page is sent to `/sign-in`, which shows Clerk's `<SignIn />` with "Continue with Google". `/login` redirects there.
