@@ -11,8 +11,13 @@ export const categoryCreateSchema = z.object({
   sortOrder: z.coerce.number().int().min(0).max(10_000).optional(),
 });
 
+// newCategory names a category to create together with the reference, so an
+// abandoned form never leaves an empty category behind.
+const newCategoryField = z.string().trim().min(1).max(80).optional();
+
 export const referenceUploadFieldsSchema = z.object({
-  category: z.string().trim().min(1).max(80),
+  category: z.string().trim().min(1).max(80).optional(),
+  newCategory: newCategoryField,
   label: z.string().trim().min(1).max(120),
   tags: z.string().trim().max(500).default(""),
 });
@@ -20,6 +25,7 @@ export const referenceUploadFieldsSchema = z.object({
 // No default on tags: an absent field keeps the current tags.
 export const referenceEditFieldsSchema = z.object({
   category: z.string().trim().min(1).max(80).optional(),
+  newCategory: newCategoryField,
   label: z.string().trim().min(1).max(120).optional(),
   tags: z.string().trim().max(500).optional(),
 });
@@ -51,10 +57,12 @@ async function readReferenceImage(form: FormData): Promise<ReferenceImageInput |
 
 export async function readReferenceUploadForm(form: FormData) {
   const fields = referenceUploadFieldsSchema.parse({
-    category: form.get("category"),
+    category: form.get("category") ?? undefined,
+    newCategory: form.get("newCategory") ?? undefined,
     label: form.get("label"),
     tags: form.get("tags") ?? "",
   });
+  if (!fields.category && !fields.newCategory) throw new ApiError(400, "category_required", "Pick or name a category.");
   const image = await readReferenceImage(form);
   if (!image) throw new ApiError(400, "image_required", "A reference image file is required.");
   return { ...fields, tags: parseTags(fields.tags), ...image };
@@ -64,11 +72,13 @@ export async function readReferenceUploadForm(form: FormData) {
 export async function readReferenceEditForm(form: FormData) {
   const fields = referenceEditFieldsSchema.parse({
     category: form.get("category") ?? undefined,
+    newCategory: form.get("newCategory") ?? undefined,
     label: form.get("label") ?? undefined,
     tags: form.get("tags") ?? undefined,
   });
   return {
     category: fields.category,
+    newCategory: fields.newCategory,
     label: fields.label,
     tags: fields.tags === undefined ? undefined : parseTags(fields.tags),
     image: await readReferenceImage(form),

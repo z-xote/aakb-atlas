@@ -21,7 +21,6 @@ const { eq } = await import("drizzle-orm");
 const sessionRoute = await import("@/app/api/references/route");
 const sessionItemRoute = await import("@/app/api/references/[id]/route");
 const adminItemRoute = await import("@/app/api/admin/references/[id]/route");
-const categoriesRoute = await import("@/app/api/references/categories/route");
 const categoryItemRoute = await import("@/app/api/references/categories/[slug]/route");
 const { readReferenceEditForm } = await import("@/features/references/schemas");
 
@@ -124,6 +123,32 @@ describe("addReferenceCategory", () => {
   });
 });
 
+describe("new category with a reference", () => {
+  test("creates the named category together with the reference", async () => {
+    const image = await references.uploadReferenceImage({ newCategory: "Towel rails", label: "Heated rail", tags: [], filename: "rail.jpg", contentType: "image/jpeg", bytes: new Uint8Array([1]), createdBy: "test" }, fakeStore);
+    expect(image.categorySlug).toBe("towel-rails");
+    expect(await categoryRow("towel-rails")).toBeDefined();
+  });
+
+  test("reuses an existing category with the same name", async () => {
+    const image = await references.uploadReferenceImage({ newCategory: "crud vanities", label: "Reused", tags: [], filename: "r.jpg", contentType: "image/jpeg", bytes: new Uint8Array([1]), createdBy: "test" }, fakeStore);
+    expect(image.categorySlug).toBe("crud-vanities");
+  });
+
+  test("leaves no category behind when the upload fails", async () => {
+    const failingStore = async () => { throw new Error("storage down"); };
+    const error = await references.uploadReferenceImage({ newCategory: "Ghost category", label: "Never saved", tags: [], filename: "g.jpg", contentType: "image/jpeg", bytes: new Uint8Array([1]), createdBy: "test" }, failingStore).catch((caught: unknown) => caught);
+    expect((error as Error).message).toBe("storage down");
+    expect(await categoryRow("ghost-category")).toBeUndefined();
+  });
+
+  test("an edit can move a reference into a new category", async () => {
+    const image = await addReference("Moving to new");
+    const result = await references.updateReferenceImage(image.id, { newCategory: "Fresh hooks", image: null }, fakeStore, async () => {});
+    expect(result.categorySlug).toBe("fresh-hooks");
+  });
+});
+
 describe("category clean-up", () => {
   test("deleting the last reference removes its category", async () => {
     await references.addReferenceCategory("Solo mirrors");
@@ -211,11 +236,6 @@ describe("updateReferenceImage", () => {
 });
 
 describe("reference routes reject unauthenticated callers", () => {
-  test("session category route returns 401 without a session", async () => {
-    const response = await categoriesRoute.POST(new Request("http://atlas.test/api/references/categories", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ label: "Signed out" }) }));
-    expect(response.status).toBe(401);
-  });
-
   test("session category rename route returns 401 without a session", async () => {
     const response = await categoryItemRoute.PATCH(new Request("http://atlas.test/api/references/categories/crud-vanities", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ label: "Signed out" }) }), { params: Promise.resolve({ slug: "crud-vanities" }) });
     expect(response.status).toBe(401);

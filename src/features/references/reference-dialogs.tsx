@@ -86,41 +86,40 @@ function ImageDrop({ currentUrl, file, onError, onFile }: { currentUrl?: string;
   );
 }
 
-function CategoryPicker({ categories, onCreated, onSelect, selected }: { categories: ReferenceCategoryRow[]; onCreated: (category: ReferenceCategoryRow) => void; onSelect: (slug: string) => void; selected: string }) {
+const NEW_CATEGORY = "__new__";
+
+// A new category stays local until the reference is saved, so cancelling the form creates nothing.
+function CategoryPicker({ categories, onName, onSelect, pending, selected }: { categories: ReferenceCategoryRow[]; onName: (label: string) => void; onSelect: (slug: string) => void; pending: string; selected: string }) {
   const [creating, setCreating] = useState(categories.length === 0);
   const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
 
-  async function create() {
-    if (!name.trim()) return;
-    setBusy(true);
-    const result = await send<ReferenceCategoryRow>("/api/references/categories", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ label: name.trim() }) });
-    setBusy(false);
-    if (result.error !== null) return setError(result.error);
-    onCreated(result.data);
+  function add() {
+    const label = name.trim();
+    if (!label) return;
+    const existing = categories.find((item) => item.label.toLowerCase() === label.toLowerCase());
+    if (existing) onSelect(existing.slug);
+    else { onName(label); onSelect(NEW_CATEGORY); }
     setName("");
-    setError("");
     setCreating(false);
   }
 
+  const chips = [...categories.map((item) => ({ key: item.id, slug: item.slug, label: item.label })), ...(pending ? [{ key: NEW_CATEGORY, slug: NEW_CATEGORY, label: pending }] : [])];
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Category">
-        {categories.map((item) => {
+        {chips.map((item) => {
           const active = item.slug === selected;
-          return <button aria-checked={active} className="inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-bold" key={item.id} onClick={() => onSelect(item.slug)} role="radio" style={{ borderColor: active ? "var(--atlas-accent)" : "var(--atlas-border)", background: active ? "var(--atlas-accent)" : "var(--atlas-bg-surface)", color: active ? "#fff" : "var(--atlas-text-secondary)" }} type="button">{active ? <CheckIcon className="size-3.5" /> : null}{item.label}</button>;
+          return <button aria-checked={active} className="inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-bold" key={item.key} onClick={() => onSelect(item.slug)} role="radio" style={{ borderColor: active ? "var(--atlas-accent)" : "var(--atlas-border)", background: active ? "var(--atlas-accent)" : "var(--atlas-bg-surface)", color: active ? "#fff" : "var(--atlas-text-secondary)" }} type="button">{active ? <CheckIcon className="size-3.5" /> : null}{item.label}{item.slug === NEW_CATEGORY ? <span className="opacity-70">new</span> : null}</button>;
         })}
         {creating ? null : <button className="inline-flex h-8 items-center gap-1 rounded-full border border-dashed px-3 text-xs font-bold" onClick={() => setCreating(true)} style={{ borderColor: "var(--atlas-border-strong)", color: "var(--atlas-text-secondary)" }} type="button"><PlusIcon className="size-3.5" />New category</button>}
       </div>
       {creating ? (
         <div className="flex items-center gap-2">
-          <input aria-label="New category name" autoFocus className="h-9 min-w-0 flex-1 border px-3 text-sm outline-none" maxLength={80} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void create(); } }} placeholder="New category, e.g. Shower screens" style={fieldStyle} value={name} />
-          <button className="atlas-btn atlas-btn-primary h-9 px-3" disabled={busy || !name.trim()} onClick={() => void create()} type="button">{busy ? "Adding…" : "Add"}</button>
-          {categories.length ? <button aria-label="Cancel new category" className="atlas-icon-button" onClick={() => { setCreating(false); setName(""); setError(""); }} type="button"><XIcon /></button> : null}
+          <input aria-label="New category name" autoFocus className="h-9 min-w-0 flex-1 border px-3 text-sm outline-none" maxLength={80} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add(); } }} placeholder="New category, e.g. Shower screens" style={fieldStyle} value={name} />
+          <button className="atlas-btn atlas-btn-primary h-9 px-3" disabled={!name.trim()} onClick={add} type="button">Add</button>
+          {chips.length ? <button aria-label="Cancel new category" className="atlas-icon-button" onClick={() => { setCreating(false); setName(""); }} type="button"><XIcon /></button> : null}
         </div>
       ) : null}
-      <ErrorText message={error} />
     </div>
   );
 }
@@ -152,7 +151,7 @@ function TagInput({ draft, onDraft, onTags, tags }: { draft: string; onDraft: (v
 
 export function ReferenceFormDialog({ categories, image, onClose }: { categories: ReferenceCategoryRow[]; image?: ReferenceDto; onClose: () => void }) {
   const router = useRouter();
-  const [options, setOptions] = useState(categories);
+  const [pendingCategory, setPendingCategory] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [label, setLabel] = useState(image?.label ?? "");
   const [category, setCategory] = useState(image?.categorySlug ?? categories[0]?.slug ?? "");
@@ -165,9 +164,10 @@ export function ReferenceFormDialog({ categories, image, onClose }: { categories
     event.preventDefault();
     if (!image && !file) return setError("Choose an image first.");
     if (!category) return setError("Pick or create a category.");
+    if (category === NEW_CATEGORY && !pendingCategory) return setError("Pick or create a category.");
     const form = new FormData();
     form.set("label", label.trim());
-    form.set("category", category);
+    form.set(category === NEW_CATEGORY ? "newCategory" : "category", category === NEW_CATEGORY ? pendingCategory : category);
     form.set("tags", [...tags, tagDraft].join(","));
     if (file) form.set("image", file);
     setBusy(true);
@@ -184,7 +184,7 @@ export function ReferenceFormDialog({ categories, image, onClose }: { categories
       <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
         <ImageDrop currentUrl={image?.url} file={file} onError={setError} onFile={(next) => { setFile(next); if (!label) setLabel(next.name.replace(/\.[^.]+$/, "").slice(0, 120)); }} />
         <label className="grid gap-1.5"><span className="atlas-label">Label</span><input className="h-10 w-full border px-3 text-sm outline-none" maxLength={120} onChange={(event) => setLabel(event.target.value)} placeholder="Floating oak vanity" required style={fieldStyle} value={label} /></label>
-        <div className="grid gap-1.5"><span className="atlas-label">Category</span><CategoryPicker categories={options} onCreated={(created) => { setOptions((current) => [...current, created]); setCategory(created.slug); router.refresh(); }} onSelect={setCategory} selected={category} /></div>
+        <div className="grid gap-1.5"><span className="atlas-label">Category</span><CategoryPicker categories={categories} onName={setPendingCategory} onSelect={setCategory} pending={pendingCategory} selected={category} /></div>
         <div className="grid gap-1.5"><span className="atlas-label">Tags</span><TagInput draft={tagDraft} onDraft={setTagDraft} onTags={setTags} tags={tags} /></div>
         <ErrorText message={error} />
         <div className="flex justify-end gap-2">

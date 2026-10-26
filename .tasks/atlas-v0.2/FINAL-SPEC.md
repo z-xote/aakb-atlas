@@ -132,7 +132,7 @@ References are optional but recommended. The selected source and references rema
 
 - The UI browses, searches and filters references. Any signed-in user can also add, edit and delete references and add categories there (VAR-29, which supersedes the earlier browse-only rule).
 - **Add reference** opens a form with an image drop zone that previews the image, a label, category chips and tag chips. It uses the same upload service, content-type check (`image/*`) and 12 MB limit as the CLI-admin upload, and records the session's device as `created_by`.
-- **New category** in the category chips takes a name only. Atlas derives the slug from the name and appends the category after the last one.
+- **New category** in the category chips takes a name only. The new category is created when the reference is saved, so a cancelled form leaves no empty category. Atlas derives the slug from the name, appends the category after the last one, and reuses an existing category with the same slug.
 - Each card has an edit action. It opens the same form, filled in, and can change the label, category, tags and image. A replacement image gets a new storage key; the old object is removed after the row points at the new one.
 - Each card has a delete action. A confirm dialog names the reference. Delete is a hard delete: the `reference_images` row and the stored object at `storage_key` are both removed.
 - A reference still pinned to an Atlas image session cannot be deleted. The dialog says how many sessions use it. Generations keep their own reference snapshot, so they never block a delete.
@@ -264,7 +264,7 @@ Exact internal filenames may vary, but the behavior below is required. All mutat
 - CLI-admin upload reference image with category, label, and tags;
 - session-authenticated `POST /api/references` uploads a reference with the same validation as the CLI-admin upload;
 - session-authenticated `PATCH /api/references/:id` changes label, category, tags and optionally the image, with the same validation;
-- session-authenticated `POST /api/references/categories` creates a category from a label;
+- the session upload and edit routes accept `newCategory` (a label) instead of `category`; the category is created with the reference and removed again if the upload fails;
 - session-authenticated `DELETE /api/references/:id` and CLI-admin `DELETE /api/admin/references/:id` hard-delete a reference and its stored object, and return `409 reference_in_use` while an Atlas image session still uses it.
 
 ### Atlas Image
