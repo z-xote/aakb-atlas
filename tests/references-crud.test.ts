@@ -22,12 +22,14 @@ const sessionRoute = await import("@/app/api/references/route");
 const sessionItemRoute = await import("@/app/api/references/[id]/route");
 const adminItemRoute = await import("@/app/api/admin/references/[id]/route");
 const categoriesRoute = await import("@/app/api/references/categories/route");
+const categoryItemRoute = await import("@/app/api/references/categories/[slug]/route");
+const { readReferenceEditForm } = await import("@/features/references/schemas");
 
 const fakeStore = async ({ objectPath }: { objectPath: string }) => ({ storageKey: objectPath, publicUrl: `https://refs.example/${objectPath}` });
 
-async function addReference(label: string) {
+async function addReference(label: string, category = "crud-vanities") {
   return references.uploadReferenceImage({
-    category: "crud-vanities",
+    category,
     label,
     tags: ["oak"],
     filename: "vanity.jpg",
@@ -37,12 +39,18 @@ async function addReference(label: string) {
   }, fakeStore);
 }
 
+async function categoryRow(slug: string) {
+  return (await getDb()).select().from(schema.referenceCategories).where(eq(schema.referenceCategories.slug, slug)).get();
+}
+
 async function referenceRow(id: string) {
   return (await getDb()).select().from(schema.referenceImages).where(eq(schema.referenceImages.id, id)).get();
 }
 
 beforeAll(async () => {
   await references.createReferenceCategory({ slug: "crud-vanities", label: "CRUD vanities", sortOrder: 0 });
+  // Keeps crud-vanities alive while other tests delete its references.
+  await addReference("Anchor vanity");
 });
 
 afterAll(async () => {
@@ -54,7 +62,7 @@ describe("deleteReferenceImage", () => {
     const image = await addReference("Unlinked vanity");
     const removed: string[] = [];
     const result = await references.deleteReferenceImage(image.id, async (key) => { removed.push(key); });
-    expect(result).toEqual({ id: image.id, label: "Unlinked vanity", storageRemoved: true });
+    expect(result).toEqual({ id: image.id, label: "Unlinked vanity", storageRemoved: true, categoryRemoved: false });
     expect(removed).toEqual([image.storageKey]);
     expect(await referenceRow(image.id)).toBeUndefined();
     expect((await references.listReferenceCatalog()).images.some((item) => item.id === image.id)).toBe(false);
@@ -116,7 +124,61 @@ describe("addReferenceCategory", () => {
   });
 });
 
+describe("category clean-up", () => {
+  test("deleting the last reference removes its category", async () => {
+    await references.addReferenceCategory("Solo mirrors");
+    const image = await addReference("Only mirror", "solo-mirrors");
+    const result = await references.deleteReferenceImage(image.id, async () => {});
+    expect(result.categoryRemoved).toBe(true);
+    expect(await categoryRow("solo-mirrors")).toBeUndefined();
+  });
+
+  test("moving the last reference out removes the old category", async () => {
+    await references.addReferenceCategory("Solo lights");
+    const image = await addReference("Only light", "solo-lights");
+    const result = await references.updateReferenceImage(image.id, { category: "crud-vanities", image: null }, fakeStore, async () => {});
+    expect(result.categoryRemoved).toBe(true);
+    expect(await categoryRow("solo-lights")).toBeUndefined();
+  });
+
+  test("a category with references left is kept", async () => {
+    const image = await addReference("One of many");
+    expect((await references.deleteReferenceImage(image.id, async () => {})).categoryRemoved).toBe(false);
+    expect(await categoryRow("crud-vanities")).toBeDefined();
+  });
+});
+
+describe("renameReferenceCategory", () => {
+  test("renames the label and slug, and refuses a name that is taken", async () => {
+    await references.addReferenceCategory("Old basins");
+    await addReference("Basin", "old-basins");
+    const renamed = await references.renameReferenceCategory("old-basins", "Stone basins");
+    expect(renamed.slug).toBe("stone-basins");
+    expect((await categoryRow("stone-basins"))?.label).toBe("Stone basins");
+    const error = await references.renameReferenceCategory("stone-basins", "CRUD vanities").catch((caught: unknown) => caught);
+    expect((error as InstanceType<typeof ApiError>).code).toBe("category_exists");
+  });
+});
+
 describe("updateReferenceImage", () => {
+  test("keeps fields the edit leaves out", async () => {
+    const image = await addReference("Partial edit");
+    await references.updateReferenceImage(image.id, { label: "Only the label", image: null }, fakeStore, async () => {});
+    const row = await referenceRow(image.id);
+    expect(row?.label).toBe("Only the label");
+    expect(row?.tagsJson).toBe(JSON.stringify(["oak"]));
+    expect(row?.categoryId).toBe(image.categoryId);
+  });
+
+  test("an absent tags field keeps tags and an empty one clears them", async () => {
+    const absent = new FormData();
+    absent.set("label", "x");
+    expect((await readReferenceEditForm(absent)).tags).toBeUndefined();
+    const empty = new FormData();
+    empty.set("tags", "");
+    expect((await readReferenceEditForm(empty)).tags).toEqual([]);
+  });
+
   test("changes label, category and tags without touching storage", async () => {
     const image = await addReference("Metadata only");
     await references.ensureReferenceCategory({ slug: "crud-baths", label: "CRUD baths", sortOrder: 5 });
@@ -152,6 +214,12 @@ describe("reference routes reject unauthenticated callers", () => {
   test("session category route returns 401 without a session", async () => {
     const response = await categoriesRoute.POST(new Request("http://atlas.test/api/references/categories", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ label: "Signed out" }) }));
     expect(response.status).toBe(401);
+  });
+
+  test("session category rename route returns 401 without a session", async () => {
+    const response = await categoryItemRoute.PATCH(new Request("http://atlas.test/api/references/categories/crud-vanities", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ label: "Signed out" }) }), { params: Promise.resolve({ slug: "crud-vanities" }) });
+    expect(response.status).toBe(401);
+    expect((await categoryRow("crud-vanities"))?.label).toBe("CRUD vanities");
   });
 
   test("session edit route returns 401 and keeps the reference", async () => {

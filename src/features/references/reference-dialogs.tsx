@@ -196,7 +196,7 @@ export function ReferenceFormDialog({ categories, image, onClose }: { categories
   );
 }
 
-export function DeleteReferenceDialog({ image, onClose }: { image: ReferenceDto; onClose: () => void }) {
+export function DeleteReferenceDialog({ image, lastInCategory, onClose }: { image: ReferenceDto; lastInCategory: boolean; onClose: () => void }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -215,11 +215,43 @@ export function DeleteReferenceDialog({ image, onClose }: { image: ReferenceDto;
   return (
     <Modal onClose={onClose} title="Delete reference">
       <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
-        <p className="text-sm">Delete <strong>“{image.label}”</strong> from {image.categoryLabel}? Its stored image is removed too. This cannot be undone.</p>
+        <p className="text-sm">Delete <strong>“{image.label}”</strong> from {image.categoryLabel}? Its stored image is removed too.{lastInCategory ? <> It is the last reference in {image.categoryLabel}, so that category is removed as well.</> : null} This cannot be undone.</p>
         <ErrorText message={error} />
         <div className="flex justify-end gap-2">
           <button className="atlas-btn atlas-btn-outline h-10 px-4" disabled={busy} onClick={onClose} type="button">Cancel</button>
           <button className="atlas-btn h-10 px-4 text-white" disabled={busy} style={{ background: "var(--destructive)" }} type="submit">{busy ? "Deleting…" : "Delete"}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+export function CategoryRenameDialog({ category, onClose }: { category: ReferenceCategoryRow; onClose: () => void }) {
+  const router = useRouter();
+  const [label, setLabel] = useState(category.label);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    const result = await send(`/api/references/categories/${encodeURIComponent(category.slug)}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ label: label.trim() }) });
+    setBusy(false);
+    if (result.error !== null) return setError(result.error);
+    router.refresh();
+    onClose();
+  }
+
+  return (
+    <Modal onClose={onClose} title="Rename category">
+      <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
+        <label className="grid gap-1.5"><span className="atlas-label">Name</span><input autoFocus className="h-10 w-full border px-3 text-sm outline-none" maxLength={80} onChange={(event) => setLabel(event.target.value)} required style={fieldStyle} value={label} /></label>
+        <p className="atlas-muted text-xs">A category is removed automatically when its last reference is deleted or moved.</p>
+        <ErrorText message={error} />
+        <div className="flex justify-end gap-2">
+          <button className="atlas-btn atlas-btn-outline h-10 px-4" disabled={busy} onClick={onClose} type="button">Cancel</button>
+          <button className="atlas-btn atlas-btn-primary h-10 px-4" disabled={busy || !label.trim()} type="submit">{busy ? "Saving…" : "Save"}</button>
         </div>
       </form>
     </Modal>

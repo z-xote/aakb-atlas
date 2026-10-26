@@ -1,4 +1,4 @@
-[FEATURE]: Add, edit and delete references and categories in the catalog
+[FEATURE]: Manage references and categories in the catalog and the CLI
 # v0.6.0 | Focus: Reference catalog
 
 -------------------------------- ✦ DETAILS ✦ --------------------------------
@@ -8,7 +8,8 @@
 1. Add an "Add reference" form to the Reference catalog. It has an image
    drop zone with a preview, a label, category chips and tag chips.
 
-2. Add a "New category" chip that creates a category from a name.
+2. Add a "New category" chip that creates a category from a name, and
+   a Rename button on the selected category filter.
 
 3. Add edit and delete buttons to each reference card. Edit opens the
    same form, filled in, and can replace the image.
@@ -18,19 +19,22 @@
 5. Block the delete with 409 reference_in_use while an Atlas image
    session still uses the reference.
 
-6. Add POST /api/references, PATCH and DELETE /api/references/[id], and
-   POST /api/references/categories. Each needs a signed-in session.
+6. Remove a category when its last reference is deleted or moved out.
 
-7. Move the form checks into readReferenceForm() so every reference
-   route applies the same type and size limits.
+7. Add POST /api/references, PATCH and DELETE /api/references/[id],
+   POST /api/references/categories and PATCH
+   /api/references/categories/[slug]. Each needs a signed-in session.
 
-8. Add DELETE /api/admin/references/[id] and the CLI command
-   atlas references delete <id>.
+8. Add matching admin routes and the CLI commands atlas references
+   edit, atlas references delete and atlas references categories
+   rename. categories create now works from --label alone.
 
-9. Update FINAL-SPEC.md so the catalog is no longer browse-only.
+9. Share the image checks between every reference route.
 
-10. Add tests for the delete, edit and category services and for the
-    auth guards.
+10. Update FINAL-SPEC.md so the catalog is no longer browse-only.
+
+11. Add tests for the delete, edit, rename and category clean-up
+    services and for the auth guards.
 
 
 
@@ -38,10 +42,11 @@
 -----------------------------------------------------------------------------
 A signed-in user could only browse the Reference catalog. Adding,
 changing or removing a reference needed the CLI and the admin token.
-There was no way to add a category at all outside the CLI.
+Categories could only be added through the CLI and never renamed.
 
 The catalog page now has an Add reference form, a New category chip,
-and edit and delete buttons on each card. After each action the page
+a Rename button for the selected category, and edit and delete buttons
+on each card. After each action the page
 calls router.refresh(), so the catalog updates without a full reload.
 
 Every upload reuses the admin route's checks. It accepts image/* only,
@@ -51,9 +56,11 @@ image session still uses cannot be deleted, and the dialog says how
 many sessions use it. Generations keep their own reference snapshot, so
 they never block a delete.
 
-Categories cannot be renamed or deleted yet. Every signed-in user can
-add, edit and delete, because Atlas has no roles yet. VAR-27 may add
-them.
+A category disappears with its last reference, so nobody deletes
+categories by hand. Categories that never had a reference stay. The
+CLI offers the same operations, so an agent can do anything the page
+does. Every signed-in user can make these changes, because Atlas has no
+roles yet. VAR-27 may add them.
 
 
 
@@ -63,15 +70,20 @@ them.
 - Ticket VAR-29. It supersedes the browse-only rule in FINAL-SPEC.md
   sections 5.6, 6, 9, 12, 16 and 17.
 
-- src/features/references/schemas.ts: readReferenceForm() reads an
-  optional image. readReferenceUploadForm() requires one.
-  categorySlug() turns a label into a slug.
+- src/features/references/schemas.ts: readReferenceUploadForm()
+  requires every field and an image. readReferenceEditForm() reads only
+  the fields sent; an empty tags field clears the tags.
+  categorySlug() turns a label into a slug. categoryCreateSchema now
+  takes an optional slug and sortOrder.
 
 - src/features/references/data.ts: addReferenceCategory() appends after
-  the highest sort_order. updateReferenceImage() stores a new image
-  under a new key and removes the old object after the row update.
-  deleteReferenceImage() counts atlas_image_session_references rows
-  first. Both removals log and report storageRemoved on failure.
+  the highest sort_order. renameReferenceCategory() changes label and
+  slug and refuses a taken slug. updateReferenceImage() keeps fields
+  the edit leaves out. A new image goes under a new key, and the old
+  object is removed after the row update. deleteReferenceImage()
+  counts atlas_image_session_references rows first.
+  dropCategoryIfEmpty() runs after a delete or a category move, and
+  both results report categoryRemoved and storageRemoved.
 
 - src/services/bunny/client.ts: deleteStoredObject() removes the local
   file or sends a Bunny DELETE. A 404 counts as removed.
@@ -81,21 +93,29 @@ them.
 
 - src/features/references/reference-dialogs.tsx: ReferenceFormDialog
   serves add and edit. ImageDrop, CategoryPicker and TagInput live in
-  the same file. Dialogs use a native <dialog> with showModal().
+  the same file, with CategoryRenameDialog. Dialogs use a native
+  <dialog> with showModal(). The catalog filters by category id, so a
+  rename keeps the filter.
 
 - tests/references-crud.test.ts mocks next/headers with no cookie. It
   covers delete, linked delete, unknown ID, category slug and order,
-  edit with and without a new image, and 401 on every session route.
+  rename, category clean-up, partial edit, edit with a new image, and
+  401 on every session route.
 
 - Gate: bun run lint passes. bun run typecheck shows only the 6 known
   TS2307 bun:test errors, one per test file. The repo does not install
-  @types/bun. bun test: 39 pass, 2 fail. The 2 failures are in
+  @types/bun. bun test: 46 pass, 2 fail. The 2 failures are in
   milestone1.test.ts and fail the same way on a clean master. bun test
   runs every file in one process, so env.ts keeps the first file's env.
 
 - Browser check on a throwaway database, port 3211: added a reference
-  with a new category and tags, then edited its label. Both refreshed
-  in place with no console errors.
+  with a new category and tags, edited a label, renamed a category.
+  Each refreshed in place with no server errors.
+
+- CLI check against port 3211: categories create --label, upload, edit
+  label and tags, edit --image, categories rename, edit --category
+  that emptied and removed the old category, delete, and the usage
+  error with exit code 3.
 
 - UNVERIFIED: real drag and drop from Finder, delete of a linked
   reference in the browser, and the Bunny DELETE call against a real

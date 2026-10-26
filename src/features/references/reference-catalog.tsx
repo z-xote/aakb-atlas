@@ -5,7 +5,7 @@ import { PencilIcon, PlusIcon, SearchIcon, TerminalIcon, Trash2Icon, XIcon } fro
 
 import type { ReferenceCategoryRow } from "@/db/schema";
 import type { ReferenceDto } from "@/features/references/data";
-import { DeleteReferenceDialog, ReferenceFormDialog } from "@/features/references/reference-dialogs";
+import { CategoryRenameDialog, DeleteReferenceDialog, ReferenceFormDialog } from "@/features/references/reference-dialogs";
 
 export function ReferenceCatalog({
   categories,
@@ -15,18 +15,21 @@ export function ReferenceCatalog({
   images: ReferenceDto[];
 }) {
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("all");
+  const [categoryId, setCategoryId] = useState("all");
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<ReferenceDto | null>(null);
   const [deleting, setDeleting] = useState<ReferenceDto | null>(null);
+  const [renaming, setRenaming] = useState<ReferenceCategoryRow | null>(null);
+  // Filter by id so a rename keeps the filter; a category removed with its last reference falls back to All.
+  const active = categories.find((item) => item.id === categoryId) ?? null;
   const filtered = useMemo(() => {
     const search = query.trim().toLowerCase();
     return images.filter((image) =>
-      (category === "all" || image.categorySlug === category) &&
+      (!active || image.categoryId === active.id) &&
       (!search || [image.label, image.categoryLabel, ...image.tags].join(" ").toLowerCase().includes(search))
     );
-  }, [category, images, query]);
-  const counts = useMemo(() => new Map(categories.map((item) => [item.slug, images.filter((image) => image.categorySlug === item.slug).length])), [categories, images]);
+  }, [active, images, query]);
+  const counts = useMemo(() => new Map(categories.map((item) => [item.id, images.filter((image) => image.categoryId === item.id).length])), [categories, images]);
 
   return (
     <>
@@ -47,9 +50,10 @@ export function ReferenceCatalog({
           <input aria-label="Search references" className="atlas-search-field" onChange={(event) => setQuery(event.target.value)} placeholder="Search references by label or tag" style={{ paddingLeft: 36, paddingRight: 40 }} value={query} />
           {query ? <button aria-label="Clear search" className="atlas-icon-button absolute right-1.5 top-1/2 -translate-y-1/2" onClick={() => setQuery("")} type="button"><XIcon /></button> : null}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <CategoryPill active={category === "all"} count={images.length} label="All" onClick={() => setCategory("all")} />
-          {categories.map((item) => <CategoryPill active={category === item.slug} count={counts.get(item.slug) ?? 0} key={item.id} label={item.label} onClick={() => setCategory(item.slug)} />)}
+        <div className="flex flex-wrap items-center gap-2">
+          <CategoryPill active={!active} count={images.length} label="All" onClick={() => setCategoryId("all")} />
+          {categories.map((item) => <CategoryPill active={active?.id === item.id} count={counts.get(item.id) ?? 0} key={item.id} label={item.label} onClick={() => setCategoryId(item.id)} />)}
+          {active ? <button aria-label={`Rename ${active.label}`} className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-bold" onClick={() => setRenaming(active)} style={{ color: "var(--atlas-text-secondary)" }} type="button"><PencilIcon className="size-3.5" />Rename</button> : null}
         </div>
       </div>
 
@@ -79,7 +83,8 @@ export function ReferenceCatalog({
 
       {adding ? <ReferenceFormDialog categories={categories} onClose={() => setAdding(false)} /> : null}
       {editing ? <ReferenceFormDialog categories={categories} image={editing} key={editing.id} onClose={() => setEditing(null)} /> : null}
-      {deleting ? <DeleteReferenceDialog image={deleting} onClose={() => setDeleting(null)} /> : null}
+      {deleting ? <DeleteReferenceDialog image={deleting} lastInCategory={counts.get(deleting.categoryId) === 1} onClose={() => setDeleting(null)} /> : null}
+      {renaming ? <CategoryRenameDialog category={renaming} onClose={() => setRenaming(null)} /> : null}
     </>
   );
 }

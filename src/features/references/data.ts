@@ -149,21 +149,49 @@ export async function uploadReferenceImage(input: {
 }
 
 // A new image gets a new object key, so the old object is removed only after the row points away from it.
+type AtlasDb = Awaited<ReturnType<typeof getDb>>;
+
+// A category disappears with its last reference. Categories that were never used stay.
+function dropCategoryIfEmpty(db: AtlasDb, categoryId: string) {
+  const [{ remaining }] = db.select({ remaining: count() }).from(referenceImages).where(eq(referenceImages.categoryId, categoryId)).all();
+  if (remaining > 0) return false;
+  db.delete(referenceCategories).where(eq(referenceCategories.id, categoryId)).run();
+  return true;
+}
+
+export async function renameReferenceCategory(slug: string, label: string) {
+  const db = await getDb();
+  const category = await findCategory(slug);
+  const nextSlug = categorySlug(label);
+  if (!nextSlug) throw new ApiError(400, "invalid_category", "Use letters or numbers in the category name.");
+  if (nextSlug !== category.slug && db.select({ id: referenceCategories.id }).from(referenceCategories).where(eq(referenceCategories.slug, nextSlug)).get()) {
+    throw new ApiError(409, "category_exists", "A reference category with that name already exists.");
+  }
+  const changes = { slug: nextSlug, label, updatedAt: Date.now() };
+  db.update(referenceCategories).set(changes).where(eq(referenceCategories.id, category.id)).run();
+  await persistDatabase();
+  return { ...category, ...changes };
+}
+
+// Omitted fields keep their current value, so the CLI can change one field at a time.
+// A new image gets a new object key, so the old object is removed only after the row points away from it.
 export async function updateReferenceImage(id: string, input: {
-  category: string;
-  label: string;
-  tags: string[];
+  category?: string;
+  label?: string;
+  tags?: string[];
   image: ReferenceImageInput | null;
 }, storeObject: ReferenceObjectWriter = uploadStoredObject, removeObject: ReferenceObjectRemover = deleteStoredObject) {
   const db = await getDb();
   const current = db.select().from(referenceImages).where(eq(referenceImages.id, id)).get();
   if (!current) throw new ApiError(404, "reference_not_found", "No reference matches that ID.");
-  const category = await findCategory(input.category);
+  const category = input.category
+    ? await findCategory(input.category)
+    : db.select().from(referenceCategories).where(eq(referenceCategories.id, current.categoryId)).get()!;
   const stored = input.image ? await storeReferenceObject(category.id, `${id}-${Date.now()}`, input.image, storeObject) : null;
   const changes = {
     categoryId: category.id,
-    label: input.label,
-    tagsJson: JSON.stringify(input.tags),
+    label: input.label ?? current.label,
+    tagsJson: input.tags ? JSON.stringify(input.tags) : current.tagsJson,
     updatedAt: Date.now(),
     ...(stored && input.image ? {
       storageKey: stored.storageKey,
@@ -173,9 +201,18 @@ export async function updateReferenceImage(id: string, input: {
     } : {}),
   };
   db.update(referenceImages).set(changes).where(eq(referenceImages.id, id)).run();
+  const categoryRemoved = category.id !== current.categoryId && dropCategoryIfEmpty(db, current.categoryId);
   await persistDatabase();
   const storageRemoved = stored ? await removeOrLog(id, current.storageKey, removeObject) : true;
-  return { id, label: input.label, categorySlug: category.slug, tags: input.tags, url: changes.publicUrl ?? current.publicUrl, storageRemoved };
+  return {
+    id,
+    label: changes.label,
+    categorySlug: category.slug,
+    tags: JSON.parse(changes.tagsJson) as string[],
+    url: changes.publicUrl ?? current.publicUrl,
+    storageRemoved,
+    categoryRemoved,
+  };
 }
 
 export async function deleteReferenceImage(id: string, removeObject: ReferenceObjectRemover = deleteStoredObject) {
@@ -198,7 +235,8 @@ export async function deleteReferenceImage(id: string, removeObject: ReferenceOb
   }
 
   db.delete(referenceImages).where(eq(referenceImages.id, id)).run();
+  const categoryRemoved = dropCategoryIfEmpty(db, image.categoryId);
   await persistDatabase();
   // The row is gone first so a storage failure leaves an orphaned object, never a broken card.
-  return { id, label: image.label, storageRemoved: await removeOrLog(id, image.storageKey, removeObject) };
+  return { id, label: image.label, storageRemoved: await removeOrLog(id, image.storageKey, removeObject), categoryRemoved };
 }
