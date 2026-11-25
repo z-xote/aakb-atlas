@@ -11,6 +11,7 @@ import {
 } from "@/types/atlas";
 
 export const MAX_FILE_ASSET_BYTES = 12 * 1024 * 1024;
+export const MAX_FILE_ASSET_LABEL_LENGTH = 80;
 const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "heic", "heif"]);
 
 export const fileFormSchema = z.object({
@@ -30,16 +31,19 @@ export const fileFormSchema = z.object({
 const optionalRoom = z.string().trim().max(80).nullable();
 
 export const fileAssetUploadFieldsSchema = z.object({
-  label: z.string().trim().max(80),
+  label: z.string().trim().max(MAX_FILE_ASSET_LABEL_LENGTH),
   room: optionalRoom,
   origin: z.enum(fileAssetOrigins).refine((value) => value !== "generated"),
   cameraPositionClock: z.enum(clockPositions).nullable(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
   retryAssetId: z.string().trim().min(1).nullable().default(null),
+  uploadKey: z.string().regex(/^[0-9a-f]{32}$/).nullable().default(null),
+}).refine(({ retryAssetId, uploadKey }) => !retryAssetId || !uploadKey, {
+  message: "Use one upload retry method.",
 });
 
 export const fileAssetMetadataSchema = z.object({
-  label: z.string().trim().min(1).max(80),
+  label: z.string().trim().min(1).max(MAX_FILE_ASSET_LABEL_LENGTH),
   room: optionalRoom,
   cameraPositionClock: z.enum(clockPositions).nullable(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20),

@@ -51,6 +51,7 @@ export async function POST(
       origin: requiredText(form, "origin"),
       cameraPositionClock: optionalText(form, "cameraPositionClock"),
       retryAssetId: optionalText(form, "retryAssetId"),
+      uploadKey: optionalText(form, "uploadKey"),
       tags,
     });
     const asset = await uploadFileAsset({

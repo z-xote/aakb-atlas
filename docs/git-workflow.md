@@ -52,3 +52,9 @@ gh pr merge <n> --squash --delete-branch \
 git switch master && git pull --ff-only
 git tag v{VERSION} && git push origin v{VERSION}
 ```
+
+## Local gate
+
+Run `bun run typecheck`, `bun run lint`, and `bun run test`. The test
+script uses `bun test --isolate` so test files can set their own database,
+authentication, and storage settings.

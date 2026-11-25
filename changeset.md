@@ -1,70 +1,45 @@
-[FIX]: Stop Generate and Retry hanging on a spinner that never ends
-
-# v0.9.0 | Focus: Atlas image workspace
+[FEATURE]: Upload a folder of site photos in one go
+# v0.10.0 | Focus: Site images
 
 -------------------------------- ✦ DETAILS ✦ --------------------------------
 
 ## TASKS
 -----------------------------------------------------------------------------
-1. Add createClientRequestId(), which falls back to getRandomValues()
-   when crypto.randomUUID is missing.
+1. Add Upload folder beside Add in empty and populated galleries.
 
-2. Wrap generate() in the workspace in try/catch and read the response
-   with readGenerationResponse(), which returns null for non-JSON pages.
+2. Upload eligible photos in subfolders through Atlas to Bunny.
 
-3. Show the server's error, a timeout note for 502, 504 and 524, or the
-   HTTP status, and clear the progress screen on every failure.
-
-4. Give the Retry button a busy state and show failures in a toast.
-
-5. Add tests for the request id fallback and the failure messages.
+3. Show progress and retry failed photos without creating duplicate assets.
 
 
 
 ## DESCRIPTION
 -----------------------------------------------------------------------------
-After pressing Generate, the progress screen stayed up for good and no
-image arrived. Nothing showed in history.
+Site staff often have a folder of visit photos ready to share. They can
+now select that folder once. Atlas uses the filenames as labels, leaves
+rooms unset, and skips empty files, unsupported files, and photos over
+12 MB.
 
-On the plain-http address, crypto.randomUUID() does not exist, so
-generate() threw before it sent the request. It had no error handling, so
-the progress screen never cleared. Retry had the same call.
-
-The id now comes from getRandomValues(), which works on any page. Any
-failure now clears the screen and says what went wrong. A proxy timeout
-returns an HTML page instead of JSON. That case now says the image may
-still finish, because the server keeps generating after the proxy gives
-up.
-
-This does not move generation out of the request. A high-quality run can
-still pass Cloudflare's 100-second limit. That needs background
-generation and is left for its own change.
 
 
 
 ## TECHNICAL NOTES
 -----------------------------------------------------------------------------
-- New: src/features/atlas-image/client-request.ts and
-  tests/atlas-image-client-request.test.ts.
+- The existing asset route accepts an upload key. Repeated requests for
+  the same photo reuse its SQLite record and Bunny object path.
 
-- Changed: workspace.tsx generate() and RetryGenerationButton in
-  generation-actions.tsx.
+- Typecheck, lint, and all 66 tests pass with `bun run test`. The test
+  script isolates each file. Plain `bun test` has two baseline failures
+  because test files share storage and authentication settings.
 
-- Production evidence, 26 October 2026: nginx logged the session and
-  direction POSTs but no POST to /atlas-image/generations. The database
-  has no generation row from that day.
+- Chrome sent a nested folder through the real asset handler and SQLite
+  with simulated Bunny responses. It retried a rejected upload and a lost
+  response and rendered the three retained photos at 320 to 1280 pixels.
 
-- Server change outside git: nginx now redirects visitors on http to
-  https and forwards X-Forwarded-Proto https. proxy_read_timeout and
-  proxy_send_timeout are 180s.
+- Production nginx returned HTTP 413 for an upload-sized request. Set
+  `client_max_body_size 13m;` in the Atlas site before release.
 
-- bun test: 61 pass, 2 fail. The same 2 tests fail on master (CLI
-  bearer auth, Bunny upload). typecheck: only the existing bun:test
-  type errors, which master has too.
-
-- Not checked in a browser. UNVERIFIED.
+- UNVERIFIED: live Bunny upload, native iPad picker, and production build.
 
 
 -----------------------------------------------------------------------------
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

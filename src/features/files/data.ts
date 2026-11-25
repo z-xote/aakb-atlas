@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { and, desc, eq } from "drizzle-orm";
 
@@ -293,7 +293,8 @@ async function reserveFileAsset(
     contentType: string;
     sizeBytes: number;
     retryAssetId?: string | null;
-  }
+  },
+  folderAssetId?: string
 ) {
   const db = await getDb();
   const file = db.select({ id: files.id }).from(files).where(eq(files.id, fileId)).get();
@@ -317,21 +318,25 @@ async function reserveFileAsset(
     updatedAt: now,
   };
 
-  if (input.retryAssetId) {
-    const existing = await getFileAsset(fileId, input.retryAssetId);
-    if (!existing) {
+  const existingId = folderAssetId ?? input.retryAssetId;
+  if (existingId) {
+    const existing = await getFileAsset(fileId, existingId);
+    if (existing) {
+      if (existing.status === "ready") {
+        if (folderAssetId) return existing;
+        throw new ApiError(409, "asset_already_ready", "That image has already uploaded.");
+      }
+      db.update(fileAssets).set(values).where(eq(fileAssets.id, existing.id)).run();
+      await persistDatabase();
+      return { ...existing, ...values } satisfies FileAssetRow;
+    }
+    if (!folderAssetId) {
       throw new ApiError(404, "asset_not_found", "That image does not belong to this file.");
     }
-    if (existing.status === "ready") {
-      throw new ApiError(409, "asset_already_ready", "That image has already uploaded.");
-    }
-    db.update(fileAssets).set(values).where(eq(fileAssets.id, existing.id)).run();
-    await persistDatabase();
-    return { ...existing, ...values } satisfies FileAssetRow;
   }
 
   const asset = {
-    id: `asset_${randomUUID()}`,
+    id: folderAssetId ?? `asset_${randomUUID()}`,
     fileId,
     ...values,
     createdAt: now,
@@ -374,22 +379,45 @@ function fileExtension(filename: string, contentType: string) {
   } as Record<string, string>)[contentType] ?? "img";
 }
 
-export async function uploadFileAsset(
-  input: AssetMetadataInput & {
-    fileId: string;
-    origin: FileAssetOrigin;
-    kind?: FileImageKind;
-    filename: string;
-    contentType: string;
-    bytes: Uint8Array;
-    retryAssetId?: string | null;
-  },
-  storeObject = uploadStoredObject
+type FileAssetUploadInput = AssetMetadataInput & {
+  fileId: string;
+  origin: FileAssetOrigin;
+  kind?: FileImageKind;
+  filename: string;
+  contentType: string;
+  bytes: Uint8Array;
+  retryAssetId?: string | null;
+  uploadKey?: string | null;
+};
+
+const activeFolderUploads = new Map<string, Promise<FileAssetDto>>();
+
+export async function uploadFileAsset(input: FileAssetUploadInput, storeObject = uploadStoredObject) {
+  if (!input.uploadKey) return storeFileAsset(input, storeObject);
+
+  // Keep the same record and Bunny object when a retry follows a lost response.
+  const key = createHash("sha256").update(`${input.fileId}:${input.uploadKey}`).digest("hex");
+  const assetId = `asset_${key}`;
+  const active = activeFolderUploads.get(assetId);
+  if (active) return active;
+
+  const upload = storeFileAsset(input, storeObject, assetId).finally(() => {
+    activeFolderUploads.delete(assetId);
+  });
+  activeFolderUploads.set(assetId, upload);
+  return upload;
+}
+
+async function storeFileAsset(
+  input: FileAssetUploadInput,
+  storeObject: typeof uploadStoredObject,
+  folderAssetId?: string
 ) {
   const asset = await reserveFileAsset(input.fileId, {
     ...input,
     sizeBytes: input.bytes.byteLength,
-  });
+  }, folderAssetId);
+  if (asset.status === "ready") return toFileAssetDto(asset);
 
   try {
     const stored = await storeObject({
