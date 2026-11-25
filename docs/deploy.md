@@ -36,6 +36,9 @@ real scheme. The site config uses it to:
   https: `crypto.randomUUID()` only exists on secure pages, and Clerk
   sends users back to the scheme it was given;
 - forward `X-Forwarded-Proto https` to Next;
+- set `client_max_body_size 13m;` in the Atlas server block at
+  `/etc/nginx/sites-available/atlas-aakb.nicourt.com`. Atlas limits each
+  photo to 12 MiB, and nginx also counts the multipart form overhead;
 - allow 180 s for `proxy_read_timeout` and `proxy_send_timeout`, because
   image generation runs inside the request. Cloudflare still cuts a
   request at about 100 s.
@@ -43,6 +46,13 @@ real scheme. The site config uses it to:
 Requests made on the host without that header, such as `curl` to
 `127.0.0.1`, are not redirected. Test a config change with
 `sudo nginx -t` before `sudo systemctl reload nginx`.
+
+Keep a copy of the site config before changing it. After reloading nginx,
+verify that a signed-out multipart request to the asset route with a
+12 MiB file reaches Atlas and returns HTTP 401. A 14 MiB file should return
+HTTP 413. Use a signed-in test file after release to upload a folder with a
+photo over 1 MiB, a photo in a subfolder, and a non-image. Confirm both
+photos load in Site images and Atlas reports the non-image as skipped.
 
 ## Release
 

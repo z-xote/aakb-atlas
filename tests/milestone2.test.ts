@@ -4,6 +4,7 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 
 import { ApiError } from "@/services/api/response";
+import { identifyFolderPhoto } from "@/features/files/folder-upload";
 
 const databaseName = `atlas-milestone2-${randomUUID()}.sqlite`;
 process.env.DATABASE_PATH = `data/${databaseName}`;
@@ -94,6 +95,50 @@ describe("Milestone 2 image contracts", () => {
     }
     expect(failedAssetId).not.toBe("");
     expect(await filesData.getFileAsset(fileId, failedAssetId)).toMatchObject({ status: "failed", errorMessage: "Upload failed. Check storage and try again." });
+  });
+
+  test("retries folder photos in place and coalesces repeated upload requests", async () => {
+    const fileId = await filesData.createFile({ ...fileInput, title: "Folder upload retry" });
+    const bytes = new Uint8Array([255, 216, 255, 217]);
+    const photo = new File([bytes], "vanity.jpg");
+    const identity = await identifyFolderPhoto(fileId, photo);
+    const input = {
+      fileId,
+      label: "Vanity wall",
+      room: null,
+      tags: [],
+      cameraPositionClock: null,
+      origin: "upload" as const,
+      filename: "vanity.jpg",
+      contentType: "image/jpeg",
+      bytes,
+      uploadKey: identity.uploadKey,
+    };
+    await expect(filesData.uploadFileAsset(input, async () => {
+      throw new Error("Bunny rejected the upload");
+    })).rejects.toMatchObject({ code: "asset_upload_failed" });
+    const failed = (await filesData.getFileDetail(fileId))?.assets[0];
+    expect(failed).toMatchObject({ id: identity.assetId, status: "failed" });
+
+    const objectPaths: string[] = [];
+    const store = async ({ objectPath }: { objectPath: string }) => {
+      objectPaths.push(objectPath);
+      return { storageKey: objectPath, publicUrl: `https://test-cdn.example/${objectPath}` };
+    };
+    const [first, concurrent] = await Promise.all([
+      filesData.uploadFileAsset(input, store),
+      filesData.uploadFileAsset(input, store),
+    ]);
+    const repeated = await filesData.uploadFileAsset(input, store);
+    expect(first).toMatchObject({ id: failed?.id, kind: "site_visit", status: "ready", room: null });
+    expect(concurrent).toEqual(first);
+    expect(repeated).toEqual(first);
+    expect(objectPaths).toEqual([`files/${fileId}/assets/${first.id}.jpg`]);
+    expect((await filesData.getFileDetail(fileId))?.assets).toHaveLength(1);
+
+    const changed = await filesData.uploadFileAsset({ ...input, bytes: new Uint8Array([1, 2, 3, 4]) }, store);
+    expect(changed.id).not.toBe(first.id);
+    expect((await filesData.getFileDetail(fileId))?.assets).toHaveLength(2);
   });
 
   test("preserves a missing Bunny configuration as a blocked, non-retryable cause", async () => {

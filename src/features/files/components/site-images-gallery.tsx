@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import type { FileAssetDto } from "@/features/files/data";
+import { FolderUpload } from "@/features/files/components/folder-upload";
 import type { FileImageKind } from "@/types/atlas";
 
 type KindFilter = "all" | FileImageKind;
@@ -79,7 +80,7 @@ function ImageCard({ asset, fileId }: { asset: FileAssetDto; fileId: string }) {
         ) : null}
         {asset.status !== "ready" ? (
           <span className="absolute inset-x-2 bottom-2 rounded px-2 py-1 text-center text-xs font-bold" style={{ background: asset.status === "failed" ? "var(--destructive)" : "var(--atlas-amber)", color: "#fff" }}>
-            {asset.status === "failed" ? "Upload failed — retry from capture" : "Uploading to Bunny…"}
+            {asset.status === "failed" ? "Upload failed" : "Uploading to Bunny…"}
           </span>
         ) : null}
       </div>
@@ -105,10 +106,7 @@ function EmptyGallery({ fileId }: { fileId: string }) {
         <strong className="text-lg font-bold">No images yet — take the first before photo</strong>
         <span className="text-sm" style={{ color: "var(--atlas-text-secondary)" }}>Capture the room as it is today. Before photos become the starting point for every Atlas Image concept.</span>
       </div>
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        <Link className="atlas-btn atlas-btn-primary h-10 px-5" href={`/files/${fileId}/images/capture`}><CameraIcon />Take photo</Link>
-        <Link className="atlas-btn atlas-btn-outline h-10 px-5" href={`/files/${fileId}/images/capture?mode=upload`}><UploadIcon />Upload</Link>
-      </div>
+      <Link className="atlas-btn atlas-btn-outline h-10 px-5" href={`/files/${fileId}/images/capture?mode=upload`}><UploadIcon />Upload a photo</Link>
     </div>
   );
 }
@@ -134,35 +132,50 @@ export function SiteImagesGallery({ assets, fileId }: { assets: FileAssetDto[]; 
     });
   }, [assets, kind, room, search]);
 
-  if (assets.length === 0) return <EmptyGallery fileId={fileId} />;
-
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex items-center gap-1 rounded-lg border p-1" role="tablist" aria-label="Image kind" style={{ borderColor: "var(--atlas-border)", background: "var(--atlas-bg-muted)" }}>
-          {kindTabs.map((tab) => {
-            const active = kind === tab.id;
-            return (
-              <button aria-selected={active} className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-bold" key={tab.id} onClick={() => setKind(tab.id)} role="tab" type="button" style={{ background: active ? "var(--atlas-bg-surface)" : "transparent", color: active ? "var(--atlas-text-primary)" : "var(--atlas-text-secondary)", boxShadow: active ? "var(--atlas-shadow)" : undefined }}>
-                {tab.label}<span className="rounded-full px-1.5 text-[11px]" style={{ background: "var(--atlas-accent-soft)", color: "var(--atlas-accent)" }}>{counts[tab.id]}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex w-full items-center gap-2 sm:w-auto">
-          <div className="relative min-w-44 flex-1 sm:w-56">
-            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" style={{ color: "var(--atlas-text-tertiary)" }} />
-            <input aria-label="Search images by label or tag" className="h-9 w-full border pl-9 pr-3 text-sm outline-none" onChange={(event) => setSearch(event.target.value)} placeholder="Search labels or tags" style={{ borderColor: "var(--atlas-border)", borderRadius: "var(--atlas-radius)", background: "var(--atlas-bg-surface)" }} value={search} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        {assets.length > 0 ? (
+          <div className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-lg border p-1" role="tablist" aria-label="Image kind" style={{ borderColor: "var(--atlas-border)", background: "var(--atlas-bg-muted)" }}>
+            {kindTabs.map((tab) => {
+              const active = kind === tab.id;
+              return (
+                <button aria-selected={active} className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-bold" key={tab.id} onClick={() => setKind(tab.id)} role="tab" type="button" style={{ background: active ? "var(--atlas-bg-surface)" : "transparent", color: active ? "var(--atlas-text-primary)" : "var(--atlas-text-secondary)", boxShadow: active ? "var(--atlas-shadow)" : undefined }}>
+                  {tab.label}<span className="rounded-full px-1.5 text-[11px]" style={{ background: "var(--atlas-accent-soft)", color: "var(--atlas-accent)" }}>{counts[tab.id]}</span>
+                </button>
+              );
+            })}
           </div>
-          <Link className="atlas-btn atlas-btn-primary h-9 px-3" href={`/files/${fileId}/images/capture`}><CameraIcon />Add</Link>
+        ) : null}
+        <FolderUpload
+          assets={assets}
+          fileId={fileId}
+          key={fileId}
+          onUploaded={() => {
+            setKind("all");
+            setRoom("all");
+            setSearch("");
+          }}
+        >
+          {assets.length > 0 ? (
+            <div className="relative w-full sm:w-56">
+              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" style={{ color: "var(--atlas-text-tertiary)" }} />
+              <input aria-label="Search images by label or tag" className="h-9 w-full border pl-9 pr-3 text-sm outline-none" onChange={(event) => setSearch(event.target.value)} placeholder="Search labels or tags" style={{ borderColor: "var(--atlas-border)", borderRadius: "var(--atlas-radius)", background: "var(--atlas-bg-surface)" }} value={search} />
+            </div>
+          ) : null}
+          <Link className="atlas-btn atlas-btn-primary h-9 shrink-0 px-3" href={`/files/${fileId}/images/capture`}><CameraIcon />Add</Link>
+        </FolderUpload>
+      </div>
+      {assets.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <RoomChip active={room === "all"} onClick={() => setRoom("all")}>All rooms</RoomChip>
+          {rooms.map((name) => <RoomChip active={room === name} key={name} onClick={() => setRoom(name)}>{name}</RoomChip>)}
+          {hasNoRoom ? <RoomChip active={room === NO_ROOM} onClick={() => setRoom(NO_ROOM)}>No room</RoomChip> : null}
         </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <RoomChip active={room === "all"} onClick={() => setRoom("all")}>All rooms</RoomChip>
-        {rooms.map((name) => <RoomChip active={room === name} key={name} onClick={() => setRoom(name)}>{name}</RoomChip>)}
-        {hasNoRoom ? <RoomChip active={room === NO_ROOM} onClick={() => setRoom(NO_ROOM)}>No room</RoomChip> : null}
-      </div>
-      {filtered.length ? (
+      ) : null}
+      {assets.length === 0 ? (
+        <EmptyGallery fileId={fileId} />
+      ) : filtered.length ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">{filtered.map((asset) => <ImageCard asset={asset} fileId={fileId} key={asset.id} />)}</div>
       ) : (
         <div className="grid place-items-center gap-1 border border-dashed p-8 text-center" style={{ borderColor: "var(--atlas-border-strong)", borderRadius: "var(--atlas-radius)" }}>

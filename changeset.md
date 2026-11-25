@@ -1,70 +1,55 @@
-[FIX]: Stop Generate and Retry hanging on a spinner that never ends
-
-# v0.9.0 | Focus: Atlas image workspace
+[FEATURE]: Upload a folder of site photos in one go
+# v0.10.0 | Focus: Site images
 
 -------------------------------- ✦ DETAILS ✦ --------------------------------
 
 ## TASKS
 -----------------------------------------------------------------------------
-1. Add createClientRequestId(), which falls back to getRandomValues()
-   when crypto.randomUUID is missing.
+1. Add Upload folder beside Add and send eligible photos to Bunny.
 
-2. Wrap generate() in the workspace in try/catch and read the response
-   with readGenerationResponse(), which returns null for non-JSON pages.
+2. Match each photo by its relative path and bytes within the Atlas file.
 
-3. Show the server's error, a timeout note for 502, 504 and 524, or the
-   HTTP status, and clear the progress screen on every failure.
-
-4. Give the Retry button a busy state and show failures in a toast.
-
-5. Add tests for the request id fallback and the failure messages.
+3. Retry failed photos after a reload and skip photos already saved.
 
 
 
 ## DESCRIPTION
 -----------------------------------------------------------------------------
-After pressing Generate, the progress screen stayed up for good and no
-image arrived. Nothing showed in history.
+Site staff can select a folder once to upload photos from it and its
+subfolders. Atlas uses the filenames as labels, leaves rooms unset, and
+skips empty files, unsupported files, and photos over 12 MiB.
 
-On the plain-http address, crypto.randomUUID() does not exist, so
-generate() threw before it sent the request. It had no error handling, so
-the progress screen never cleared. Retry had the same call.
+If an upload fails, select the original folder after a reload. Atlas
+retries the photo against its existing record and skips saved photos.
 
-The id now comes from getRandomValues(), which works on any page. Any
-failure now clears the screen and says what went wrong. A proxy timeout
-returns an HTML page instead of JSON. That case now says the image may
-still finish, because the server keeps generating after the proxy gives
-up.
-
-This does not move generation out of the request. A high-quality run can
-still pass Cloudflare's 100-second limit. That needs background
-generation and is left for its own change.
 
 
 
 ## TECHNICAL NOTES
 -----------------------------------------------------------------------------
-- New: src/features/atlas-image/client-request.ts and
-  tests/atlas-image-client-request.test.ts.
+- The asset route hashes the submitted bytes with the relative-path
+  digest. The browser computes the same ID and checks gallery status
+  before sending bytes. The 32-character preview keys remain valid.
 
-- Changed: workspace.tsx generate() and RetryGenerationButton in
-  generation-actions.tsx.
+- Typecheck, lint, and all 68 tests pass with `bun run test`. Plain
+  `bun test` has two baseline failures from shared test settings.
 
-- Production evidence, 26 October 2026: nginx logged the session and
-  direction POSTs but no POST to /atlas-image/generations. The database
-  has no generation row from that day.
+- Chrome and WebKit exercised reload, in-tab retry, a lost response, and
+  a 12 MiB photo with the real asset handler and simulated Bunny. After
+  reload, one retry kept all three SQLite IDs. A repeat sent no uploads.
 
-- Server change outside git: nginx now redirects visitors on http to
-  https and forwards X-Forwarded-Proto https. proxy_read_timeout and
-  proxy_send_timeout are 180s.
+- A single PNG returned HTTP 201, matched the local storage bytes, and
+  stayed ready after reopening SQLite.
 
-- bun test: 61 pass, 2 fail. The same 2 tests fail on master (CLI
-  bearer auth, Bunny upload). typecheck: only the existing bun:test
-  type errors, which master has too.
+- The live Atlas nginx site now has a 13 MiB request limit. Over public
+  HTTPS, a 12 MiB multipart file reached Atlas and returned the expected
+  signed-out HTTP 401. A 14 MiB file still returned HTTP 413.
 
-- Not checked in a browser. UNVERIFIED.
+- Retest on a fresh Atlas file. Photos saved by preview commit 44d7c08
+  used random keys and have no stable folder identity.
+
+- UNVERIFIED: signed-in live Bunny uploads, the native iPad picker, and
+  the production build.
 
 
 -----------------------------------------------------------------------------
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

@@ -105,7 +105,13 @@ Bulk rapid capture is not required in v0.2. The expected loop is capture -> revi
 
 File Images remain embedded inside File Details as a dedicated internal view/tab. They provide:
 
-- capture and upload actions;
+- **Add** for capture and single-photo upload;
+- **Upload folder** starts an upload when the user selects a folder. Atlas
+  includes images in subfolders and skips empty files, unsupported files,
+  and photos over 12 MB. It uses filenames for labels and leaves rooms
+  unset. The gallery shows progress and can retry failed photos in place.
+  After reloading, select the original folder to retry incomplete photos.
+  Atlas skips previously saved photos with the same relative path and bytes;
 - search by label and tag;
 - filters for all, site photos, and generated images;
 - room filters, including **No room**;

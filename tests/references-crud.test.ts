@@ -8,8 +8,7 @@ process.env.DATABASE_PATH = `data/${databaseName}`;
 process.env.ATLAS_CLI_ADMIN_TOKEN = "test-cli-admin-token";
 process.env.ATLAS_STORAGE_DRIVER = "local";
 
-// No session cookie, so getAuthenticatedSession() resolves to null outside `next dev`.
-mock.module("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
+mock.module("@clerk/nextjs/server", () => ({ currentUser: async () => null }));
 
 const references = await import("@/features/references/data");
 const filesData = await import("@/features/files/data");
