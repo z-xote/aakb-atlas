@@ -1,13 +1,15 @@
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
+
+import { folderAssetId } from "@/features/files/folder-asset-id";
 import {
   fileAssetContentType,
   MAX_FILE_ASSET_BYTES,
   MAX_FILE_ASSET_LABEL_LENGTH,
 } from "@/features/files/schemas";
 
-export type FolderPhoto = { file: File; uploadKey: string };
-
 export function selectFolderPhotos(files: File[]) {
-  const photos: FolderPhoto[] = [];
+  const photos: File[] = [];
   let skipped = 0;
   for (const file of files) {
     if (
@@ -19,14 +21,18 @@ export function selectFolderPhotos(files: File[]) {
       skipped += 1;
       continue;
     }
-    const bytes = crypto.getRandomValues(new Uint8Array(16));
-    const uploadKey = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-    photos.push({ file, uploadKey });
+    photos.push(file);
   }
   return { photos, skipped };
 }
 
-export async function uploadFolderPhoto(fileId: string, { file, uploadKey }: FolderPhoto) {
+export async function identifyFolderPhoto(fileId: string, file: File) {
+  const uploadKey = bytesToHex(sha256(file.webkitRelativePath || file.name));
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return { uploadKey, assetId: folderAssetId(fileId, uploadKey, bytes) };
+}
+
+export async function uploadFolderPhoto(fileId: string, file: File, uploadKey: string) {
   const label = file.name.replace(/\.[^.]+$/, "").trim().slice(0, MAX_FILE_ASSET_LABEL_LENGTH).trimEnd();
   const form = new FormData();
   form.set("image", file, file.name);

@@ -148,6 +148,7 @@ export function SiteImagesGallery({ assets, fileId }: { assets: FileAssetDto[]; 
           </div>
         ) : null}
         <FolderUpload
+          assets={assets}
           fileId={fileId}
           key={fileId}
           onUploaded={() => {

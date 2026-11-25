@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { and, desc, eq } from "drizzle-orm";
 
@@ -16,6 +16,7 @@ import {
   type PrimaryContactRow,
 } from "@/db/schema";
 import { parseAssetTags } from "@/features/files/schemas";
+import { folderAssetId } from "@/features/files/folder-asset-id";
 import { ApiError } from "@/services/api/response";
 import { uploadStoredObject } from "@/services/bunny/client";
 import type {
@@ -395,9 +396,7 @@ const activeFolderUploads = new Map<string, Promise<FileAssetDto>>();
 export async function uploadFileAsset(input: FileAssetUploadInput, storeObject = uploadStoredObject) {
   if (!input.uploadKey) return storeFileAsset(input, storeObject);
 
-  // Keep the same record and Bunny object when a retry follows a lost response.
-  const key = createHash("sha256").update(`${input.fileId}:${input.uploadKey}`).digest("hex");
-  const assetId = `asset_${key}`;
+  const assetId = folderAssetId(input.fileId, input.uploadKey, input.bytes);
   const active = activeFolderUploads.get(assetId);
   if (active) return active;
 

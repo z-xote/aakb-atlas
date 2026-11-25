@@ -37,7 +37,7 @@ export const fileAssetUploadFieldsSchema = z.object({
   cameraPositionClock: z.enum(clockPositions).nullable(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
   retryAssetId: z.string().trim().min(1).nullable().default(null),
-  uploadKey: z.string().regex(/^[0-9a-f]{32}$/).nullable().default(null),
+  uploadKey: z.string().regex(/^(?:[0-9a-f]{32}|[0-9a-f]{64})$/).nullable().default(null),
 }).refine(({ retryAssetId, uploadKey }) => !retryAssetId || !uploadKey, {
   message: "Use one upload retry method.",
 });
